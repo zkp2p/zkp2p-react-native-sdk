@@ -1,5 +1,25 @@
-import Zkp2pReactNativeSdk from './NativeZkp2pReactNativeSdk';
+import { createClient, getClient } from './client';
+import { useAuthentication } from './hooks/useAuthentication';
+import { useProofGeneration } from './hooks/useProofGeneration';
+import { useTransactionExtraction } from './hooks/useTransactionExtraction';
+import { useInterceptedPayload } from './hooks/useInterceptedPayload';
+import { AuthenticationWebView } from './components/AuthenticationWebView';
+import { RPCWebView } from './components/RPCWebView';
+import type {
+  ExtractedTransaction,
+  NetworkEvent,
+  ProviderSettings,
+} from './types';
 
-export function multiply(a: number, b: number): number {
-  return Zkp2pReactNativeSdk.multiply(a, b);
-}
+export {
+  createClient,
+  getClient,
+  useAuthentication,
+  useProofGeneration,
+  useTransactionExtraction,
+  useInterceptedPayload,
+  AuthenticationWebView,
+  RPCWebView,
+};
+
+export type { ExtractedTransaction, NetworkEvent, ProviderSettings };

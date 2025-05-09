@@ -32,7 +32,6 @@ interface UseZkp2pReturn {
   handleError: (error: string) => void;
   handleSuccess: () => void;
   isAuthenticating: boolean;
-  error: Error | null;
   isAuthenticated: boolean;
   isCheckingStoredAuth: boolean;
   checkStoredAuth: () => Promise<boolean>;
@@ -46,9 +45,9 @@ interface UseZkp2pReturn {
   isGeneratingProof: boolean;
   claimData: any | null;
   generateProof: (
-    provider: ProviderSettings,
+    providerSettings: ProviderSettings,
     transaction: ExtractedTransaction,
-    interceptedPayload: NetworkEvent,
+    payload: NetworkEvent,
     intentHash: string
   ) => Promise<any>;
   isWebViewReady: boolean;
@@ -78,18 +77,12 @@ export const useZkp2p = (): UseZkp2pReturn => {
     handleError,
     handleSuccess,
     isAuthenticating,
-    error,
   } = useAuthentication();
 
   const { extractTransactionsData } = useTransactionExtraction();
 
-  const {
-    interceptedPayload,
-    handleIntercept,
-    clearInterceptedPayload,
-    isCheckingStoredAuth,
-    checkStoredAuth,
-  } = useInterceptedPayload(provider);
+  const { interceptedPayload, isCheckingStoredAuth, checkStoredAuth } =
+    useInterceptedPayload(provider);
 
   const {
     isGeneratingProof,
@@ -150,23 +143,23 @@ export const useZkp2p = (): UseZkp2pReturn => {
   // Proof generation
   const generateProof = useCallback(
     async (
-      provider: ProviderSettings,
+      providerSettings: ProviderSettings,
       transaction: ExtractedTransaction,
-      interceptedPayload: NetworkEvent,
+      payload: NetworkEvent,
       intentHash: string
     ) => {
-      if (!transaction || !interceptedPayload || !provider) {
+      if (!transaction || !payload || !providerSettings) {
         throw new Error('Missing required data for proof generation');
       }
 
       return generateProofBase(
-        provider,
+        providerSettings,
         transaction,
-        interceptedPayload,
+        payload,
         intentHash
       );
     },
-    [selectedTransaction, interceptedPayload, provider, generateProofBase]
+    [generateProofBase]
   );
 
   // Handle intercepted data
@@ -197,7 +190,6 @@ export const useZkp2p = (): UseZkp2pReturn => {
     handleError,
     handleSuccess,
     isAuthenticating,
-    error,
     isAuthenticated,
     isCheckingStoredAuth,
     checkStoredAuth,

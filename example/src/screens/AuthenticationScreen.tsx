@@ -13,7 +13,6 @@ interface AuthenticationScreenProps {
   onSuccess: (platform: string, actionType: string) => Promise<void>;
   onError: (error: string) => void;
   isAuthenticating: boolean;
-  error: Error | null;
   provider: ProviderSettings | null;
 }
 
@@ -21,7 +20,6 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
   onSuccess,
   onError,
   isAuthenticating,
-  error,
   provider,
 }) => {
   const handlePlatformSelect = async (platform: string, actionType: string) => {
@@ -66,12 +64,6 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Select Platform</Text>
-
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error.message}</Text>
-        </View>
-      )}
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity

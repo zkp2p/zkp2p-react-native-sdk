@@ -5,14 +5,12 @@ import { DEFAULT_PROVIDERS_BASE_URL } from '../utils/constants';
 
 interface AuthenticationState {
   isAuthenticating: boolean;
-  error: Error | null;
   provider: ProviderSettings | null;
 }
 
 export const useAuthentication = () => {
   const [state, setState] = useState<AuthenticationState>({
     isAuthenticating: false,
-    error: null,
     provider: null,
   });
 

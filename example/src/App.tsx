@@ -15,7 +15,6 @@ export default function App() {
     startAuthentication,
     handleError,
     isAuthenticating,
-    error,
     isAuthenticated,
     checkStoredAuth,
     transactions,
@@ -74,7 +73,6 @@ export default function App() {
             onSuccess={handleAuthSuccess}
             onError={handleError}
             isAuthenticating={isAuthenticating}
-            error={error}
             provider={provider}
           />
         );

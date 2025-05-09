@@ -1,6 +1,6 @@
 {
   "name": "zkp2p-react-native-sdk",
-  "version": "0.1.0",
+  "version": "0.0.1-rc.1",
   "description": "React Native SDK for ZKP2P",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -65,7 +65,9 @@
     "@eslint/eslintrc": "^3.3.0",
     "@eslint/js": "^9.22.0",
     "@evilmartians/lefthook": "^1.5.0",
+    "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/cli": "15.0.0-alpha.2",
+    "@react-native-cookies/cookies": "^6.2.1",
     "@react-native/babel-preset": "0.79.2",
     "@react-native/eslint-config": "^0.78.0",
     "@release-it/conventional-changelog": "^9.0.2",
@@ -80,13 +82,19 @@
     "react": "19.0.0",
     "react-native": "0.79.2",
     "react-native-builder-bob": "^0.40.10",
+    "react-native-webview": "^13.13.5",
     "release-it": "^17.10.0",
     "turbo": "^1.10.7",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "viem": "^2.29.1"
   },
   "peerDependencies": {
+    "@react-native-async-storage/async-storage": "*",
+    "@react-native-cookies/cookies": "*",
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-webview": "*",
+    "viem": "^2.21.55"
   },
   "workspaces": [
     "example"
@@ -162,12 +170,8 @@
     "version": "0.50.2"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^2.1.2",
     "@zkp2p/react-native-webview-intercept": "^0.3.6",
     "@zkp2p/reclaim-witness-sdk": "^4.0.0-reclaim",
-    "jsonpath-plus": "^10.3.0",
-    "react-native-cookie": "^0.3.0",
-    "react-native-webview": "^13.13.5",
-    "viem": "^2.29.0"
+    "jsonpath-plus": "^10.3.0"
   }
 }

@@ -351,6 +351,7 @@ export interface ProviderMetadata {
   fallbackUrlRegex: string;
   fallbackMethod: string;
   preprocessRegex: string;
+  shouldReplayRequestInPage?: boolean;
   transactionsExtraction: TransactionsExtraction;
   proofMetadataSelectors: Selector[];
 }

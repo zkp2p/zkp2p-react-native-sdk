@@ -1,25 +1,23 @@
 import { createClient, getClient } from './client';
-import { useAuthentication } from './hooks/useAuthentication';
-import { useProofGeneration } from './hooks/useProofGeneration';
-import { useTransactionExtraction } from './hooks/useTransactionExtraction';
-import { useInterceptedPayload } from './hooks/useInterceptedPayload';
+import { useZkp2p } from './hooks/useZkp2p';
 import { AuthenticationWebView } from './components/AuthenticationWebView';
 import { RPCWebView } from './components/RPCWebView';
 import type {
   ExtractedTransaction,
   NetworkEvent,
   ProviderSettings,
+  SignalIntentParams,
+  FulfillIntentParams,
+  SignalIntentResponse,
 } from './types';
 
-export {
-  createClient,
-  getClient,
-  useAuthentication,
-  useProofGeneration,
-  useTransactionExtraction,
-  useInterceptedPayload,
-  AuthenticationWebView,
-  RPCWebView,
-};
+export { createClient, getClient, useZkp2p, AuthenticationWebView, RPCWebView };
 
-export type { ExtractedTransaction, NetworkEvent, ProviderSettings };
+export type {
+  ExtractedTransaction,
+  NetworkEvent,
+  ProviderSettings,
+  SignalIntentParams,
+  FulfillIntentParams,
+  SignalIntentResponse,
+};

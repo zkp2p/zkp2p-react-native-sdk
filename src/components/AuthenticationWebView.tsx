@@ -39,9 +39,12 @@ interface NetworkEvent {
 
 interface AuthenticationWebViewProps {
   provider: ProviderSettings;
-  onSuccess?: (data: any) => void;
+  onSuccess?: (data: NetworkEvent) => void;
   onError?: (error: string) => void;
   onClose?: () => void;
+  onNavigationStateChange?: (navState: any) => void;
+  onLoadEnd?: () => void;
+  // Styling props
   containerStyle?: ViewStyle;
   webViewStyle?: ViewStyle;
   loadingContainerStyle?: ViewStyle;
@@ -49,6 +52,16 @@ interface AuthenticationWebViewProps {
   loadingIndicatorColor?: string;
   loadingText?: string;
   redirectCountdown?: number;
+  // WebView configuration
+  interceptConfig?: {
+    xhr?: boolean;
+    fetch?: boolean;
+    html?: boolean;
+    maxBodyBytes?: number;
+  };
+  userAgent?: string;
+  // Additional WebView props
+  webViewProps?: any;
 }
 
 export const AuthenticationWebView: React.FC<AuthenticationWebViewProps> = ({
@@ -56,6 +69,9 @@ export const AuthenticationWebView: React.FC<AuthenticationWebViewProps> = ({
   onSuccess,
   onError,
   onClose,
+  onNavigationStateChange,
+  onLoadEnd,
+  // Styling props with defaults
   containerStyle,
   webViewStyle,
   loadingContainerStyle,
@@ -63,6 +79,16 @@ export const AuthenticationWebView: React.FC<AuthenticationWebViewProps> = ({
   loadingIndicatorColor = '#FFFFFF',
   loadingText = 'Redirecting in {countdown} seconds...',
   redirectCountdown = 3,
+  // WebView configuration with defaults
+  interceptConfig = {
+    xhr: true,
+    fetch: true,
+    html: true,
+    maxBodyBytes: 1024 * 1024 * 10,
+  },
+  userAgent = DEFAULT_USER_AGENT,
+  // Additional WebView props
+  webViewProps,
 }) => {
   const webViewRef = useRef<WebView>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -109,23 +135,17 @@ export const AuthenticationWebView: React.FC<AuthenticationWebViewProps> = ({
           ref={webViewRef}
           source={{ uri: provider.authLink }}
           urlPatterns={[provider.metadata.urlRegex]}
-          interceptConfig={{
-            xhr: true,
-            fetch: true,
-            html: true,
-            maxBodyBytes: 1024 * 1024 * 10,
-          }}
-          userAgent={DEFAULT_USER_AGENT}
-          onNavigationStateChange={(navState) => {
-            console.log('Navigation state:', navState);
-          }}
-          onLoadEnd={() => console.log('Page loaded')}
+          interceptConfig={interceptConfig}
+          userAgent={userAgent}
+          onNavigationStateChange={onNavigationStateChange}
+          onLoadEnd={onLoadEnd}
           onError={(syntheticEvent) => {
             console.error('WebView error:', syntheticEvent.nativeEvent);
             onError?.(syntheticEvent.nativeEvent.description);
           }}
           onIntercept={handleIntercept}
-          style={styles.webView}
+          style={[styles.webView, webViewProps?.style]}
+          {...webViewProps}
         />
 
         {isRedirecting && (

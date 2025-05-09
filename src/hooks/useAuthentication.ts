@@ -1,9 +1,7 @@
 import { useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ProviderSettings } from '../types';
-
-const DEFAULT_PROVIDERS_BASE_URL =
-  'https://raw.githubusercontent.com/zkp2p/providers/refs/heads/main/';
+import { DEFAULT_PROVIDERS_BASE_URL } from '../utils/constants';
 
 interface AuthenticationState {
   isAuthenticating: boolean;
@@ -23,9 +21,7 @@ export const useAuthentication = () => {
       try {
         const storedBaseUrl = await AsyncStorage.getItem('PROVIDERS_BASE_URL');
         const baseUrl = storedBaseUrl || DEFAULT_PROVIDERS_BASE_URL;
-        console.log('baseUrl', baseUrl);
         const configUrl = `${baseUrl}${platform}/${actionType}.json`;
-        console.log('configUrl', configUrl);
 
         const response = await fetch(configUrl);
         if (!response.ok) {
@@ -54,7 +50,7 @@ export const useAuthentication = () => {
         setState((prev) => ({
           ...prev,
           provider,
-          isAuthenticating: false,
+          isAuthenticating: true, // Keep authenticating true for WebView
         }));
         return provider;
       } catch (error) {
@@ -79,9 +75,18 @@ export const useAuthentication = () => {
     }));
   }, []);
 
+  const handleSuccess = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isAuthenticating: false,
+      error: null,
+    }));
+  }, []);
+
   return {
     ...state,
     startAuthentication,
     handleError,
+    handleSuccess,
   };
 };

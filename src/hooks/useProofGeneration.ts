@@ -36,10 +36,10 @@ interface WindowRPCResponse {
 }
 
 export const useProofGeneration = () => {
-  const rpcWebViewRef = useRef<WebView>(null);
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
-  const [claimData, setClaimData] = useState<any | null>(null);
+  const [claimData, setClaimData] = useState<CreateClaimResponse | null>(null);
   const [isWebViewReady, setIsWebViewReady] = useState(false);
+  const rpcWebViewRef = useRef<WebView>(null);
   const pendingRpcs = useRef<{
     [key: string]: {
       resolve: (response: WindowRPCResponse) => void;
@@ -56,6 +56,7 @@ export const useProofGeneration = () => {
         throw new Error('RPC WebView not initialized');
       }
 
+      console.log('request', request);
       const requestId = Math.random().toString(16).replace('.', '');
       const req: WindowRPCIncomingMsg = {
         module: 'attestor-core',
@@ -90,37 +91,28 @@ export const useProofGeneration = () => {
   );
 
   const handleRPCMessage = useCallback((event: any) => {
-    console.log('dataNative', event.nativeEvent.data);
     try {
-      const data: WindowRPCResponse = JSON.parse(event.nativeEvent.data);
-      console.log('RPC WebView message:', data);
+      const data = JSON.parse(event.nativeEvent.data);
+      console.log('Received RPC message:', data);
 
-      if (!data.module || data.module !== 'attestor-core') {
-        return;
+      // Handle RPC response
+      if (data.id && pendingRpcs.current[data.id]) {
+        const pendingRpc = pendingRpcs.current[data.id]!;
+        if (data.error) {
+          pendingRpc.reject(new Error(data.error.data?.message || 'RPC error'));
+        } else {
+          pendingRpc.resolve(data);
+        }
+        delete pendingRpcs.current[data.id];
       }
 
-      const { id, type } = data;
-      if (type === 'createClaimStep') {
-        console.log('Proof generation step:', data.step);
-      } else if (type === 'createClaimDone') {
-        const pendingRpc = pendingRpcs.current[id];
-        if (pendingRpc) {
-          pendingRpc.resolve(data);
-          delete pendingRpcs.current[id];
-        }
-      } else if (type === 'error') {
-        const pendingRpc = pendingRpcs.current[id];
-        if (pendingRpc) {
-          const error = new Error(data.error?.data.message || 'Unknown error');
-          if (data.error?.data.stack) {
-            error.stack = data.error.data.stack;
-          }
-          pendingRpc.reject(error);
-          delete pendingRpcs.current[id];
-        }
+      // Handle proof generation response
+      if (data.type === 'createClaimDone') {
+        setClaimData(data.response.claimData);
+        setIsGeneratingProof(false);
       }
     } catch (error) {
-      console.error('Failed to parse RPC message:', error);
+      console.error('Error handling RPC message:', error);
     }
   }, []);
 
@@ -139,159 +131,152 @@ export const useProofGeneration = () => {
       transaction: ExtractedTransaction,
       interceptedPayload: NetworkEvent,
       intentHash: string
-    ): Promise<CreateClaimResponse> => {
-      if (!isWebViewReady) {
-        throw new Error('RPC WebView is not ready');
+    ) => {
+      if (!rpcWebViewRef.current) {
+        throw new Error('RPC WebView not initialized');
       }
 
       setIsGeneratingProof(true);
       setClaimData(null);
+
       try {
-        const wait = new Promise((resolve) =>
-          setTimeout(resolve, 10000 + Math.random() * 5000)
+        // Handle preprocess regex if exists
+        let responseBody = interceptedPayload.response.body || '{}';
+        if (provider.metadata.preprocessRegex) {
+          const preprocessRegex = new RegExp(provider.metadata.preprocessRegex);
+          const preprocessedResponseBody = responseBody.match(preprocessRegex);
+          if (preprocessedResponseBody && preprocessedResponseBody[1]) {
+            responseBody = preprocessedResponseBody[1];
+          }
+        }
+
+        // Build headers from the intercepted request
+        const headers: { [k: string]: string } = {};
+        const headersToSend: { [k: string]: string } = {};
+
+        Object.entries(interceptedPayload?.request?.headers || {}).forEach(
+          ([name, value]) => {
+            headers[name] = value as string;
+            if (
+              provider.skipRequestHeaders.length > 0 &&
+              !provider.skipRequestHeaders?.includes(name)
+            ) {
+              headersToSend[name] = value as string;
+            }
+          }
         );
-        const proofPromise = (async () => {
-          console.log('Payload request:', interceptedPayload);
+        headersToSend['User-Agent'] = DEFAULT_USER_AGENT as string;
 
-          // Build headers from the intercepted request
-          const headers: { [k: string]: string } = {};
-          const headersToSend: { [k: string]: string } = {};
+        // Build param values from response body
+        let paramValues = {} as { [key: string]: string };
+        provider.paramNames?.forEach((paramName, index) => {
+          const selector = provider.paramSelectors?.[index];
+          if (!selector) return;
 
-          Object.entries(interceptedPayload?.request?.headers || {}).forEach(
-            ([name, value]) => {
-              headers[name] = value as string;
-              if (
-                provider.skipRequestHeaders.length > 0 &&
-                !provider.skipRequestHeaders?.includes(name)
-              ) {
-                headersToSend[name] = value as string;
+          switch (selector.type) {
+            case 'jsonPath':
+              const jsonPath = selector.value.replace(
+                '{{INDEX}}',
+                transaction.originalIndex.toString()
+              );
+              const metadataPath = JSONPath({
+                path: jsonPath,
+                json: JSON.parse(responseBody),
+                resultType: 'value',
+              }) as any[];
+              paramValues[paramName] = String(metadataPath[0] || '');
+              break;
+            case 'regex':
+              const regex = new RegExp(selector.value);
+              const matches = responseBody.match(regex);
+              if (matches && matches[1]) {
+                paramValues[paramName] = matches[1];
               }
-            }
-          );
-          headersToSend['User-Agent'] = DEFAULT_USER_AGENT as string;
+              break;
+          }
+        });
 
-          console.log('headersToSend:', headersToSend);
+        // Build secret params
+        let secretParams = { headers: {} } as {
+          headers: { [key: string]: string };
+          [key: string]: any;
+        };
+        provider.secretHeaders?.forEach((headerName) => {
+          if (headerName === 'Cookie') {
+            secretParams.cookieStr = interceptedPayload.request.cookie || '';
+          } else {
+            secretParams.headers[headerName] = headers[headerName] || '';
+          }
+        });
 
-          // Build param values from response body
-          let paramValues = {} as { [key: string]: string };
-          const responseBody = interceptedPayload?.response?.body || '{}';
-          console.log('Response body:', responseBody);
-
-          provider.paramNames?.forEach((paramName, index) => {
-            const selector = provider.paramSelectors?.[index];
-            if (!selector) return;
-
-            switch (selector.type) {
-              case 'jsonPath':
-                const jsonPath = selector.value.replace(
-                  '{{INDEX}}',
-                  transaction.originalIndex.toString()
-                );
-                const metadataPath = JSONPath({
-                  path: jsonPath,
-                  json: JSON.parse(responseBody),
-                });
-                paramValues[paramName] = String(metadataPath[0]);
-                break;
-              case 'regex':
-                const regex = new RegExp(selector.value);
-                const matches = responseBody.match(regex);
-                if (matches && matches[1]) {
-                  paramValues[paramName] = matches[1];
+        // Create claim request
+        const claimParams = {
+          name: 'http',
+          context: JSON.stringify({
+            contextAddress: '0x0',
+            contextMessage: intentHash,
+          }),
+          params: {
+            url: provider.url,
+            method: provider.method,
+            body: provider.body,
+            headers: headersToSend,
+            paramValues: paramValues,
+            responseMatches: provider.responseMatches,
+            responseRedactions:
+              provider.responseRedactions?.map((redaction) => {
+                let redactionParams: { [key: string]: string } = {};
+                if (redaction.jsonPath) {
+                  redactionParams.jsonPath = redaction.jsonPath.replace(
+                    '{{INDEX}}',
+                    transaction.originalIndex.toString()
+                  );
                 }
-                break;
-            }
-          });
+                if (redaction.regex) {
+                  redactionParams.regex = redaction.regex.replace(
+                    '{{INDEX}}',
+                    transaction.originalIndex.toString()
+                  );
+                }
+                if (redaction.xPath) {
+                  redactionParams.xPath = redaction.xPath.replace(
+                    '{{INDEX}}',
+                    transaction.originalIndex.toString()
+                  );
+                }
+                return redactionParams;
+              }) || [],
+          },
+          secretParams: secretParams,
+          ownerPrivateKey:
+            '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
+          client: { url: DEFAULT_WITNESS_URL },
+          zkProofConcurrency: 4,
+          zkEngine: 'snarkjs' as const, // TODO: make this dynamic
+        };
 
-          // Build secret params
-          let secretParams = { headers: {} } as {
-            headers: { [key: string]: string };
-            [key: string]: any;
-          };
-          provider.secretHeaders?.forEach((headerName) => {
-            console.log('Header name:', headerName);
-            console.log('headers:', headers);
-            if (headerName === 'Cookie') {
-              console.log('cookiestr:', headers);
-              secretParams.cookieStr = interceptedPayload.request.cookie;
-            } else {
-              secretParams.headers[headerName] = headers[headerName] || '';
-            }
-          });
-
-          console.log('secretParams:', secretParams);
-
-          // Create claim request
-          const response = await rpcRequest('createClaim', {
-            name: 'http',
-            context: JSON.stringify({
-              contextAddress: '0x0',
-              contextMessage: intentHash,
-            }),
-            params: {
-              url: provider.url,
-              method: provider.method,
-              body: provider.body,
-              headers: headersToSend,
-              paramValues: paramValues,
-              responseMatches: provider.responseMatches,
-              responseRedactions:
-                provider.responseRedactions?.map((redaction) => {
-                  let redactionParams: { [key: string]: string } = {};
-                  if (redaction.jsonPath) {
-                    redactionParams.jsonPath = redaction.jsonPath.replace(
-                      '{{INDEX}}',
-                      transaction.originalIndex.toString()
-                    );
-                  }
-                  if (redaction.regex) {
-                    redactionParams.regex = redaction.regex.replace(
-                      '{{INDEX}}',
-                      transaction.originalIndex.toString()
-                    );
-                  }
-                  if (redaction.xPath) {
-                    redactionParams.xPath = redaction.xPath.replace(
-                      '{{INDEX}}',
-                      transaction.originalIndex.toString()
-                    );
-                  }
-                  return redactionParams;
-                }) || [],
-            },
-            secretParams: secretParams,
-            ownerPrivateKey:
-              '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
-            client: { url: DEFAULT_WITNESS_URL },
-            zkProofConcurrency: 4,
-            zkEngine: 'snarkjs',
-          });
-
-          return response;
-        })();
-
-        const [response] = await Promise.all([proofPromise, wait]);
-        setClaimData(
-          response?.claimData || response?.response?.claimData || null
-        );
+        console.log('Sending claim request:', claimParams);
+        const response = await rpcRequest('createClaim', claimParams);
+        console.log('Received claim response:', response);
         return response;
       } catch (error) {
-        throw error;
-      } finally {
+        console.error('Error generating proof:', error);
         setIsGeneratingProof(false);
+        setClaimData(null);
+        throw error;
       }
     },
-    [rpcRequest, isWebViewReady]
+    [rpcRequest]
   );
 
   return {
-    rpcWebViewRef,
     isGeneratingProof,
     claimData,
+    generateProof,
+    rpcWebViewRef,
     isWebViewReady,
     handleRPCMessage,
     handleWebViewLoad,
     handleWebViewError,
-    generateProof,
   };
 };

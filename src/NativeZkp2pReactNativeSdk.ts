@@ -11,6 +11,7 @@ export interface NetworkEvent {
   };
   response?: {
     body: string;
+    status?: number;
   };
 }
 
@@ -61,7 +62,6 @@ export interface ProviderSettings {
 }
 
 export interface Spec extends TurboModule {
-  multiply(a: number, b: number): number;
   startAuthentication(provider: ProviderSettings): Promise<void>;
   handleSuccess(provider: ProviderSettings): Promise<void>;
   handleError(errorMessage: string): Promise<void>;

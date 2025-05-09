@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useProofGeneration } from 'zkp2p-react-native-sdk';
+import { useZkp2p } from 'zkp2p-react-native-sdk';
 import type {
   ExtractedTransaction,
   ProviderSettings,
@@ -36,7 +36,7 @@ export const ProofScreen: React.FC<ProofScreenProps> = ({
     handleWebViewLoad,
     handleWebViewError,
     generateProof,
-  } = useProofGeneration();
+  } = useZkp2p();
 
   const handleGenerateProof = async () => {
     if (!isWebViewReady) {
@@ -59,43 +59,55 @@ export const ProofScreen: React.FC<ProofScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Proof Generation</Text>
-
-      <View style={styles.transactionInfo}>
-        <Text style={styles.infoTitle}>Selected Transaction:</Text>
-        <Text style={styles.infoText}>Recipient: {transaction.recipient}</Text>
-        <Text style={styles.infoText}>
-          Amount: {transaction.amount} {transaction.currency}
-        </Text>
-        <Text style={styles.infoText}>Date: {transaction.date}</Text>
-        <Text style={styles.infoText}>Payment ID: {transaction.paymentId}</Text>
-      </View>
-
-      <TouchableOpacity
-        style={[
-          styles.button,
-          (isGeneratingProof || !isWebViewReady) && styles.buttonDisabled,
-        ]}
-        onPress={handleGenerateProof}
-        disabled={isGeneratingProof || !isWebViewReady}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
       >
-        {isGeneratingProof ? (
-          <ActivityIndicator color="white" />
-        ) : !isWebViewReady ? (
-          <Text style={styles.buttonText}>Initializing...</Text>
-        ) : (
-          <Text style={styles.buttonText}>Generate Proof</Text>
-        )}
-      </TouchableOpacity>
+        <Text style={styles.title}>Proof Generation</Text>
 
-      {claimData && (
-        <ScrollView style={styles.resultContainer}>
-          <Text style={styles.resultTitle}>Proof Generated Successfully!</Text>
-          <Text style={styles.resultText}>
-            Claim Data: {JSON.stringify(claimData, null, 2)}
+        <View style={styles.transactionInfo}>
+          <Text style={styles.infoTitle}>Selected Transaction:</Text>
+          <Text style={styles.infoText}>
+            Recipient: {transaction.recipient}
           </Text>
-        </ScrollView>
-      )}
+          <Text style={styles.infoText}>
+            Amount: {transaction.amount} {transaction.currency}
+          </Text>
+          <Text style={styles.infoText}>Date: {transaction.date}</Text>
+          <Text style={styles.infoText}>
+            Payment ID: {transaction.paymentId}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.button,
+            (isGeneratingProof || !isWebViewReady) && styles.buttonDisabled,
+          ]}
+          onPress={handleGenerateProof}
+          disabled={isGeneratingProof || !isWebViewReady}
+        >
+          {isGeneratingProof ? (
+            <ActivityIndicator color="white" />
+          ) : !isWebViewReady ? (
+            <Text style={styles.buttonText}>Initializing...</Text>
+          ) : (
+            <Text style={styles.buttonText}>Generate Proof</Text>
+          )}
+        </TouchableOpacity>
+
+        {claimData && (
+          <View style={styles.resultContainer}>
+            <Text style={styles.resultTitle}>
+              Proof Generated Successfully!
+            </Text>
+            <Text style={styles.resultText}>
+              Claim Data: {JSON.stringify(claimData, null, 2)}
+            </Text>
+          </View>
+        )}
+      </ScrollView>
 
       {/* Hidden RPC WebView */}
       <RPCWebView
@@ -111,8 +123,13 @@ export const ProofScreen: React.FC<ProofScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
   },
   title: {
     fontSize: 24,
@@ -160,7 +177,6 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: '#E3F2FD',
     borderRadius: 8,
-    maxHeight: 300,
   },
   resultTitle: {
     fontSize: 18,

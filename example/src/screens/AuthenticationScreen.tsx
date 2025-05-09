@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,58 +6,58 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import {
-  useAuthentication,
-  AuthenticationWebView,
-} from 'zkp2p-react-native-sdk';
+import { AuthenticationWebView } from 'zkp2p-react-native-sdk';
 import type { ProviderSettings } from 'zkp2p-react-native-sdk';
 
 interface AuthenticationScreenProps {
-  onSuccess: (data: { provider: ProviderSettings }) => void;
+  onSuccess: (platform: string, actionType: string) => Promise<void>;
+  onError: (error: string) => void;
+  isAuthenticating: boolean;
+  error: Error | null;
+  provider: ProviderSettings | null;
 }
 
 export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
   onSuccess,
+  onError,
+  isAuthenticating,
+  error,
+  provider,
 }) => {
-  const [showWebView, setShowWebView] = useState(false);
-  const [currentProvider, setCurrentProvider] =
-    useState<ProviderSettings | null>(null);
-  const {
-    isAuthenticating,
-    error: authError,
-    startAuthentication,
-    handleError,
-  } = useAuthentication();
-
-  const handleStartAuth = async () => {
+  const handlePlatformSelect = async (platform: string, actionType: string) => {
     try {
-      const provider = await startAuthentication('venmo', 'transfer_venmo');
-      if (provider) {
-        setCurrentProvider(provider);
-        setShowWebView(true);
-      }
+      await onSuccess(platform, actionType);
     } catch (error) {
-      console.error('Authentication error:', error);
-      handleError(
-        error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error('Platform selection error:', error);
+      onError(
+        error instanceof Error ? error.message : 'Failed to select platform'
       );
     }
   };
 
-  if (showWebView && currentProvider) {
+  const handleWebViewSuccess = async () => {
+    if (provider) {
+      try {
+        await onSuccess(provider.metadata.platform, provider.actionType);
+      } catch (error) {
+        console.error('WebView success error:', error);
+        onError(
+          error instanceof Error ? error.message : 'Authentication failed'
+        );
+      }
+    }
+  };
+
+  if (isAuthenticating && provider) {
     return (
       <View style={styles.container}>
+        <Text style={styles.title}>
+          Authenticating with {provider.metadata.platform}
+        </Text>
         <AuthenticationWebView
-          provider={currentProvider}
-          onSuccess={() => {
-            onSuccess({ provider: currentProvider });
-            setShowWebView(false);
-          }}
-          onError={(error: string) => {
-            handleError(error);
-            setShowWebView(false);
-          }}
-          onClose={() => setShowWebView(false)}
+          provider={provider}
+          onSuccess={handleWebViewSuccess}
+          onError={onError}
         />
       </View>
     );
@@ -65,21 +65,27 @@ export const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Authentication</Text>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleStartAuth}
-        disabled={isAuthenticating}
-      >
-        {isAuthenticating ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text style={styles.buttonText}>Start Authentication</Text>
-        )}
-      </TouchableOpacity>
-      {authError && (
-        <Text style={styles.errorText}>Error: {authError.message}</Text>
+      <Text style={styles.title}>Select Platform</Text>
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error.message}</Text>
+        </View>
       )}
+
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={[styles.button, isAuthenticating && styles.buttonDisabled]}
+          onPress={() => handlePlatformSelect('venmo', 'transfer_venmo')}
+          disabled={isAuthenticating}
+        >
+          {isAuthenticating ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.buttonText}>Venmo</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -96,23 +102,31 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  buttonContainer: {
+    gap: 15,
+  },
   button: {
     backgroundColor: '#007AFF',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
   },
+  buttonDisabled: {
+    backgroundColor: '#ccc',
+  },
   buttonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  errorText: {
-    color: 'red',
-    marginTop: 10,
-    textAlign: 'center',
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
   },
-  webView: {
-    flex: 1,
+  errorText: {
+    color: '#c62828',
+    fontSize: 14,
   },
 });

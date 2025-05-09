@@ -60,5 +60,8 @@ export const chainIds: { [network: string]: string } = {
 };
 
 export const DEFAULT_BASE_API_URL = 'https://api.zkp2p.xyz/v1';
-// export const DEFAULT_WITNESS_URL = 'https://witness-proxy.zkp2p.xyz';
+// export const DEFAULT_WITNESS_URL = 'https://witness-proxy.zkp2p.xyz'; // TODO: use this in prod
 export const DEFAULT_WITNESS_URL = 'http://localhost:8001';
+
+export const DEFAULT_PROVIDERS_BASE_URL =
+  'https://raw.githubusercontent.com/zkp2p/providers/refs/heads/main/';

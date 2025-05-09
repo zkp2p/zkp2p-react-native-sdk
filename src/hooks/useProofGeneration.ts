@@ -160,7 +160,10 @@ export const useProofGeneration = () => {
           Object.entries(interceptedPayload?.request?.headers || {}).forEach(
             ([name, value]) => {
               headers[name] = value as string;
-              if (!provider.skipRequestHeaders?.includes(name)) {
+              if (
+                provider.skipRequestHeaders.length > 0 &&
+                !provider.skipRequestHeaders?.includes(name)
+              ) {
                 headersToSend[name] = value as string;
               }
             }

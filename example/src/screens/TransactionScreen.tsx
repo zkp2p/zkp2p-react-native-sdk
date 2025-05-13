@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import type { ExtractedTransaction } from 'zkp2p-react-native-sdk';
+import type { ExtractedItemsList } from 'zkp2p-react-native-sdk';
 
 interface TransactionScreenProps {
-  transactions: ExtractedTransaction[];
-  onSelectTransaction: (transaction: ExtractedTransaction) => void;
+  transactions: ExtractedItemsList[];
+  onSelectTransaction: (transaction: ExtractedItemsList) => void;
 }
 
 export const TransactionScreen: React.FC<TransactionScreenProps> = ({
@@ -21,16 +21,17 @@ export const TransactionScreen: React.FC<TransactionScreenProps> = ({
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <Text style={styles.title}>Transactions</Text>
-        {transactions.map((transaction, index) => (
+        {transactions.map((transaction, idx) => (
           <TouchableOpacity
-            key={index}
+            key={idx}
             style={styles.transactionItem}
             onPress={() => onSelectTransaction(transaction)}
           >
-            <Text style={styles.transactionText}>
-              {transaction.amount} {transaction.currency}
-            </Text>
-            <Text style={styles.transactionText}>{transaction.recipient}</Text>
+            {Object.keys(transaction).map((key, innerIdx) => (
+              <Text key={innerIdx} style={styles.transactionText}>
+                {key}: {transaction[key]}
+              </Text>
+            ))}
           </TouchableOpacity>
         ))}
       </ScrollView>

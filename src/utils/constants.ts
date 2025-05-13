@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { Address } from 'viem';
 
 type Contracts = {
@@ -60,8 +61,15 @@ export const chainIds: { [network: string]: string } = {
 };
 
 export const DEFAULT_BASE_API_URL = 'https://api.zkp2p.xyz/v1';
-// export const DEFAULT_WITNESS_URL = 'https://witness-proxy.zkp2p.xyz'; // TODO: use this in prod
-export const DEFAULT_WITNESS_URL = 'http://localhost:8001';
+export const DEFAULT_WITNESS_URL = 'https://witness-proxy.zkp2p.xyz';
 
 export const DEFAULT_PROVIDERS_BASE_URL =
   'https://raw.githubusercontent.com/zkp2p/providers/refs/heads/main/';
+
+export const DEFAULT_USER_AGENT = Platform.select({
+  ios: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15',
+  android:
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  default:
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+});

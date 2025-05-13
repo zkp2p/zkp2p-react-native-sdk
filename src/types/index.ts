@@ -1,5 +1,9 @@
 import type { WalletClient, TransactionReceipt, Hash } from 'viem';
 import type { Range, Currency } from './contract';
+import type { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
+
+export interface AuthWVOverrides
+  extends Partial<React.ComponentProps<typeof InterceptWebView>> {}
 
 export type {
   DepositView,
@@ -314,15 +318,11 @@ export type GetDepositResponse = {
   statusCode: number;
 };
 
-export interface ExtractedTransaction {
-  recipient: string;
-  amount: string;
-  date: string;
-  paymentId: string;
-  currency: string;
+export type ExtractedItemsList = {
+  [k: string]: any; // dynamic columns
   hidden: boolean;
   originalIndex: number;
-}
+};
 
 export interface Selector {
   type: string;
@@ -363,6 +363,7 @@ export interface ProviderSettings {
   method: string;
   skipRequestHeaders: string[];
   body: string;
+  countryCode?: string;
   metadata: ProviderMetadata;
   paramNames: string[];
   paramSelectors: Selector[];

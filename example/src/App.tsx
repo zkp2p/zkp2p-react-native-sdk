@@ -1,124 +1,122 @@
 import { useState, useEffect } from 'react';
 import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
-import { useZkp2p } from 'zkp2p-react-native-sdk';
+import { useZkp2p, Zkp2pProvider } from 'zkp2p-react-native-sdk';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
 import { TransactionScreen } from './screens/TransactionScreen';
 import { ProofScreen } from './screens/ProofScreen';
+import CookieManager from '@react-native-cookies/cookies';
+import type { ExtractedItemsList } from '../../src/types';
 
-export default function App() {
+function AppContent() {
   const [currentScreen, setCurrentScreen] = useState<
     'auth' | 'transactions' | 'proof'
   >('auth');
-
+  const [selectedItem, setSelectedItem] = useState<ExtractedItemsList | null>(
+    null
+  );
   const {
+    /* auth */
     provider,
-    startAuthentication,
-    handleError,
     isAuthenticating,
     isAuthenticated,
-    checkStoredAuth,
-    transactions,
-    selectedTransaction,
-    handleTransactionSelect,
     interceptedPayload,
+    startAuthentication,
+
+    /* tx */
+    itemsList,
+
+    /* proof */
+    generateProof,
+    isGeneratingProof,
+    claimData,
   } = useZkp2p();
 
-  // Check stored auth on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const hasValidAuth = await checkStoredAuth();
-        if (hasValidAuth) {
-          setCurrentScreen('transactions');
-        } else {
-          setCurrentScreen('auth');
-        }
-      } catch (err) {
-        console.error('Error checking auth:', err);
-        setCurrentScreen('auth');
-      }
-    };
-    checkAuth();
-  }, [checkStoredAuth]);
+  console.log('App state:', {
+    isAuthenticated,
+    interceptedPayload,
+    currentScreen,
+    isAuthenticating,
+    provider,
+    hasProvider: !!provider,
+    hasItemsList: itemsList.length > 0,
+  });
 
-  // Handle screen changes based on auth state
+  console.log('selectedItem:', selectedItem);
+
+  /* ─── route guards ─── */
   useEffect(() => {
-    if (isAuthenticated) {
-      setCurrentScreen('transactions');
-    }
+    console.log('isAuthenticated changed:', isAuthenticated);
+    if (isAuthenticated) setCurrentScreen('transactions');
   }, [isAuthenticated]);
-
-  // Handle transaction selection
   useEffect(() => {
-    if (selectedTransaction) {
-      console.log('Transaction selected, navigating to proof screen');
-      setCurrentScreen('proof');
-    }
-  }, [selectedTransaction]);
+    if (itemsList.length > 0 && selectedItem) setCurrentScreen('proof');
+  }, [itemsList, selectedItem]);
 
-  const handleAuthSuccess = async (platform: string, actionType: string) => {
-    try {
-      await startAuthentication(platform, actionType);
-    } catch (err) {
-      console.error('Authentication error:', err);
-      handleError(err instanceof Error ? err.message : 'Authentication failed');
-    }
-  };
+  console.log('cookies:', CookieManager.getAll(true));
 
-  const renderScreen = () => {
+  /* ─── screen renderer ─── */
+  const screen = (() => {
     switch (currentScreen) {
       case 'auth':
-        return (
+        return startAuthentication ? (
           <AuthenticationScreen
-            onSuccess={handleAuthSuccess}
-            onError={handleError}
             isAuthenticating={isAuthenticating}
-            provider={provider}
+            startAuthentication={startAuthentication}
           />
+        ) : (
+          <View style={styles.center}>
+            <Text>Loading provider...</Text>
+          </View>
         );
+
       case 'transactions':
-        if (!provider) {
-          return (
-            <View style={styles.container}>
-              <Text>No provider selected</Text>
-            </View>
-          );
-        }
-        return (
+        return itemsList.length > 0 ? (
           <TransactionScreen
-            transactions={transactions}
-            onSelectTransaction={handleTransactionSelect}
+            transactions={itemsList}
+            onSelectTransaction={setSelectedItem}
           />
+        ) : (
+          <View style={styles.center}>
+            <Text>No provider.</Text>
+          </View>
         );
+
       case 'proof':
-        if (!interceptedPayload || !selectedTransaction || !provider) {
-          return (
-            <View style={styles.container}>
-              <Text>
-                No intercepted payload or selected transaction available
-              </Text>
-            </View>
-          );
-        }
-        return (
+        return provider && selectedItem && generateProof ? (
           <ProofScreen
             provider={provider}
-            transaction={selectedTransaction}
             interceptedPayload={interceptedPayload}
-            intentHash="12354"
+            intentHash="12345" // TODO: get from signalIntent
+            itemIndex={selectedItem.originalIndex}
+            transaction={selectedItem}
+            generateProof={generateProof}
+            isGeneratingProof={isGeneratingProof}
+            claimData={claimData}
           />
+        ) : (
+          <View style={styles.center}>
+            <Text>Missing data.</Text>
+          </View>
         );
-      default:
-        return null;
     }
-  };
+  })();
 
-  return <SafeAreaView style={styles.container}>{renderScreen()}</SafeAreaView>;
+  return <SafeAreaView style={styles.container}>{screen}</SafeAreaView>;
+}
+
+export default function App() {
+  return (
+    <Zkp2pProvider
+      witnessUrl="https://witness-proxy.zkp2p.xyz"
+      zkEngine="snarkjs"
+      rpcTimeout={30000}
+    >
+      <AppContent />
+    </Zkp2pProvider>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,65 +1,11 @@
 import type { CreateClaimResponse } from '@zkp2p/reclaim-witness-sdk';
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
-
-export interface NetworkEvent {
-  request: {
-    url: string;
-    method: string;
-    headers: { [key: string]: string };
-    cookie?: string;
-  };
-  response?: {
-    body: string;
-    status?: number;
-  };
-}
-
-export interface ExtractedTransaction {
-  recipient: string;
-  amount: string;
-  date: string;
-  paymentId: string;
-  currency: string;
-  hidden: boolean;
-  originalIndex: number;
-}
-
-export interface ProviderSettings {
-  actionType: string;
-  authLink: string;
-  url: string;
-  method: string;
-  skipRequestHeaders?: string[];
-  body?: string;
-  metadata: {
-    transactionsExtraction?: {
-      transactionJsonPathListSelector: string;
-      transactionJsonPathSelectors: {
-        recipient?: string;
-        amount?: string;
-        date?: string;
-        paymentId?: string;
-        currency?: string;
-      };
-    };
-  };
-  paramNames?: string[];
-  paramSelectors?: Array<{
-    type: 'jsonPath' | 'regex';
-    value: string;
-  }>;
-  secretHeaders?: string[];
-  responseMatches?: Array<{
-    type: 'jsonPath' | 'regex';
-    value: string;
-  }>;
-  responseRedactions?: Array<{
-    jsonPath?: string;
-    regex?: string;
-    xPath?: string;
-  }>;
-}
+import type {
+  ProviderSettings,
+  ExtractedItemsList,
+  NetworkEvent,
+} from './types';
 
 export interface Spec extends TurboModule {
   startAuthentication(provider: ProviderSettings): Promise<void>;
@@ -67,7 +13,7 @@ export interface Spec extends TurboModule {
   handleError(errorMessage: string): Promise<void>;
   generateProof(
     provider: ProviderSettings,
-    transaction: ExtractedTransaction,
+    transaction: ExtractedItemsList,
     interceptedPayload: NetworkEvent,
     intentHash: string
   ): Promise<CreateClaimResponse>;
@@ -75,7 +21,7 @@ export interface Spec extends TurboModule {
   extractTransactionsData(
     provider: ProviderSettings,
     jsonResponseBody: string
-  ): Promise<ExtractedTransaction[]>;
+  ): Promise<ExtractedItemsList[]>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('Zkp2pReactNativeSdk');

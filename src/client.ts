@@ -58,12 +58,12 @@ export class Zkp2pClient {
     this.publicClient = createPublicClient({
       chain: {
         id: this.chainId,
-        name: 'Optimism',
+        name: 'Base',
         nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
         rpcUrls: { default: { http: [''] } },
       } as Chain,
       transport: http(),
-    });
+    }) as unknown as PublicClient;
   }
 
   async fulfillIntent(params: FulfillIntentParams): Promise<Hash> {

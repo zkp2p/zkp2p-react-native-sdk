@@ -1,21 +1,21 @@
 import { forwardRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { DEFAULT_WITNESS_URL } from '../utils/constants';
 
 interface RPCWebViewProps {
   onMessage: (event: any) => void;
   onLoad?: () => void;
   onError?: (error: any) => void;
+  witnessUrl: string;
 }
 
 export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
-  ({ onMessage, onLoad, onError }, ref) => {
+  ({ onMessage, onLoad, onError, witnessUrl }, ref) => {
     return (
       <View style={styles.container}>
         <WebView
           ref={ref}
-          source={{ uri: `${DEFAULT_WITNESS_URL}/browser-rpc` }}
+          source={{ uri: `${witnessUrl}/browser-rpc` }}
           originWhitelist={['*']}
           javaScriptEnabled={true}
           onMessage={onMessage}

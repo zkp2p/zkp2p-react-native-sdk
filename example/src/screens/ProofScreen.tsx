@@ -6,186 +6,141 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useZkp2p } from 'zkp2p-react-native-sdk';
 import type {
-  ExtractedTransaction,
   ProviderSettings,
+  NetworkEvent,
+  ExtractedItemsList,
 } from 'zkp2p-react-native-sdk';
-import { RPCWebView } from 'zkp2p-react-native-sdk';
 
-interface ProofScreenProps {
+/* ───────────────────────── Props ───────────────────────── */
+interface Props {
   provider: ProviderSettings;
-  transaction: ExtractedTransaction;
-  interceptedPayload: any;
+  interceptedPayload: NetworkEvent | null;
   intentHash: string;
+  itemIndex: number;
+  transaction: ExtractedItemsList;
+
+  /* injected from <App /> */
+  generateProof: ReturnType<typeof useZkp2p>['generateProof'];
+  isGeneratingProof: boolean;
+  claimData: any;
 }
 
-export const ProofScreen: React.FC<ProofScreenProps> = ({
+/* ───────────────────────── Component ───────────────────── */
+export const ProofScreen: React.FC<Props> = ({
   provider,
-  transaction,
   interceptedPayload,
   intentHash,
+  itemIndex,
+  transaction,
+  generateProof,
+  isGeneratingProof,
+  claimData,
 }) => {
-  const {
-    rpcWebViewRef,
-    isGeneratingProof,
-    claimData,
-    isWebViewReady,
-    handleRPCMessage,
-    handleWebViewLoad,
-    handleWebViewError,
-    generateProof,
-  } = useZkp2p();
-
-  const handleGenerateProof = async () => {
-    if (!isWebViewReady) {
-      console.log('Waiting for WebView to be ready...');
+  const handleGenerate = () => {
+    if (
+      !provider ||
+      !intentHash ||
+      !interceptedPayload ||
+      itemIndex === null ||
+      !generateProof
+    ) {
+      console.error('Missing required data');
       return;
     }
-
-    try {
-      const proof = await generateProof(
-        provider,
-        transaction,
-        interceptedPayload,
-        intentHash
-      );
-      console.log('Generated proof:', proof);
-    } catch (error) {
-      console.error('Proof generation error:', error);
-    }
+    console.log('provider', provider);
+    console.log('interceptedPayload', interceptedPayload);
+    console.log('intentHash', intentHash);
+    console.log('itemIndex', itemIndex);
+    console.log('generateProof', generateProof);
+    generateProof(provider, interceptedPayload, intentHash, itemIndex).catch(
+      console.error
+    );
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={true}
-      >
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Proof Generation</Text>
 
-        <View style={styles.transactionInfo}>
-          <Text style={styles.infoTitle}>Selected Transaction:</Text>
-          <Text style={styles.infoText}>
-            Recipient: {transaction.recipient}
-          </Text>
-          <Text style={styles.infoText}>
-            Amount: {transaction.amount} {transaction.currency}
-          </Text>
-          <Text style={styles.infoText}>Date: {transaction.date}</Text>
-          <Text style={styles.infoText}>
-            Payment ID: {transaction.paymentId}
-          </Text>
+        <View style={styles.card}>
+          {Object.entries(transaction).map(
+            ([key, value]) =>
+              key !== 'hidden' &&
+              key !== 'originalIndex' && (
+                <Text key={key} style={styles.row}>
+                  <Text style={styles.label}>{key}: </Text>
+                  <Text style={styles.value}>{String(value)}</Text>
+                </Text>
+              )
+          )}
         </View>
 
         <TouchableOpacity
-          style={[
-            styles.button,
-            (isGeneratingProof || !isWebViewReady) && styles.buttonDisabled,
-          ]}
-          onPress={handleGenerateProof}
-          disabled={isGeneratingProof || !isWebViewReady}
+          style={[styles.button, isGeneratingProof && styles.disabled]}
+          onPress={handleGenerate}
+          disabled={isGeneratingProof}
         >
           {isGeneratingProof ? (
-            <ActivityIndicator color="white" />
-          ) : !isWebViewReady ? (
-            <Text style={styles.buttonText}>Initializing...</Text>
+            <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.buttonText}>Generate Proof</Text>
           )}
         </TouchableOpacity>
 
         {claimData && (
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultTitle}>
-              Proof Generated Successfully!
-            </Text>
+          <View style={styles.result}>
+            <Text style={styles.resultTitle}>Claim Data</Text>
             <Text style={styles.resultText}>
-              Claim Data: {JSON.stringify(claimData, null, 2)}
+              {JSON.stringify(claimData, null, 2)}
             </Text>
           </View>
         )}
       </ScrollView>
-
-      {/* Hidden RPC WebView */}
-      <RPCWebView
-        ref={rpcWebViewRef}
-        onMessage={handleRPCMessage}
-        onLoad={handleWebViewLoad}
-        onError={handleWebViewError}
-      />
     </View>
   );
 };
 
+/* ───────────────────────── Styles ──────────────────────── */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  content: { padding: 20 },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
   },
-  transactionInfo: {
-    backgroundColor: 'white',
-    padding: 15,
+
+  card: {
+    backgroundColor: '#fff',
     borderRadius: 8,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    padding: 16,
+    marginBottom: 24,
+    elevation: 2,
   },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 5,
-  },
+  row: { marginBottom: 4 },
+  label: { fontWeight: '600', color: '#333', textTransform: 'capitalize' },
+  value: { color: '#333' },
+
   button: {
     backgroundColor: '#007AFF',
-    padding: 15,
+    padding: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  resultContainer: {
-    marginTop: 20,
-    padding: 15,
+  disabled: { backgroundColor: '#bbb' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+
+  result: {
+    marginTop: 24,
     backgroundColor: '#E3F2FD',
+    padding: 16,
     borderRadius: 8,
   },
-  resultTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
-    color: '#007AFF',
-  },
-  resultText: {
-    fontSize: 14,
-    color: '#333',
-  },
+  resultTitle: { fontWeight: '600', marginBottom: 8 },
+  resultText: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 });

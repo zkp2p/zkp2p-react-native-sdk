@@ -1,23 +1,16 @@
+// index.ts ― updated
 import { createClient, getClient } from './client';
 import { useZkp2p } from './hooks/useZkp2p';
-import { AuthenticationWebView } from './components/AuthenticationWebView';
-import { RPCWebView } from './components/RPCWebView';
-import type {
-  ExtractedTransaction,
-  NetworkEvent,
-  ProviderSettings,
-  SignalIntentParams,
-  FulfillIntentParams,
-  SignalIntentResponse,
-} from './types';
+import { Zkp2pProvider, Zkp2pContext } from './providers';
 
-export { createClient, getClient, useZkp2p, AuthenticationWebView, RPCWebView };
+export { createClient, getClient, useZkp2p, Zkp2pProvider, Zkp2pContext };
 
 export type {
-  ExtractedTransaction,
+  ExtractedItemsList,
   NetworkEvent,
   ProviderSettings,
   SignalIntentParams,
   FulfillIntentParams,
   SignalIntentResponse,
-};
+  AuthWVOverrides,
+} from './types';

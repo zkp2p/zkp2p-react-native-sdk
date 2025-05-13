@@ -1706,7 +1706,7 @@ PODS:
     - Yoga
   - SocketRocket (0.7.1)
   - Yoga (0.0.0)
-  - Zkp2pReactNativeSdk (0.1.0):
+  - Zkp2pReactNativeSdk (0.0.1-rc.1):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -1970,7 +1970,7 @@ SPEC CHECKSUMS:
   fast_float: 06eeec4fe712a76acc9376682e4808b05ce978b6
   FBLazyVector: 84b955f7b4da8b895faf5946f73748267347c975
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
-  glog: eb93e2f488219332457c3c4eafd2738ddc7e80b8
+  glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 314be5250afa5692b57b4dd1705959e1973a8ebe
   RCT-Folly: e78785aa9ba2ed998ea4151e314036f6c49e6d82
   RCTDeprecation: 83ffb90c23ee5cea353bd32008a7bca100908f8c
@@ -2039,7 +2039,7 @@ SPEC CHECKSUMS:
   RNCAsyncStorage: 39c42c1e478e1f5166d1db52b5055e090e85ad66
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: c758bfb934100bb4bf9cbaccb52557cee35e8bdf
-  Zkp2pReactNativeSdk: b16844ac9dacc2cd5fe46172077771d7792a3b03
+  Zkp2pReactNativeSdk: 8ecb4e8662bf84d51f813c2a72d6b0b63463b922
 
 PODFILE CHECKSUM: 3dd7e6e59e916d4c6f026f575dcabe0fd18d5341
 

@@ -1,27 +1,22 @@
 import type { CreateClaimResponse } from '@zkp2p/reclaim-witness-sdk';
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
-import type {
-  ProviderSettings,
-  ExtractedItemsList,
-  NetworkEvent,
-} from './types';
 
 export interface Spec extends TurboModule {
-  startAuthentication(provider: ProviderSettings): Promise<void>;
-  handleSuccess(provider: ProviderSettings): Promise<void>;
+  startAuthentication(provider: Object): Promise<void>;
+  handleSuccess(provider: Object): Promise<void>;
   handleError(errorMessage: string): Promise<void>;
   generateProof(
-    provider: ProviderSettings,
-    transaction: ExtractedItemsList,
-    interceptedPayload: NetworkEvent,
+    provider: Object,
+    transaction: Object,
+    interceptedPayload: Object,
     intentHash: string
   ): Promise<CreateClaimResponse>;
-  handleIntercept(event: NetworkEvent): Promise<void>;
+  handleIntercept(event: Object): Promise<void>;
   extractTransactionsData(
-    provider: ProviderSettings,
+    provider: Object,
     jsonResponseBody: string
-  ): Promise<ExtractedItemsList[]>;
+  ): Promise<Object[]>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('Zkp2pReactNativeSdk');

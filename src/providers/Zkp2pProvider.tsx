@@ -52,6 +52,7 @@ interface Zkp2pProviderProps {
   children: ReactNode;
   witnessUrl?: string;
   zkEngine?: 'snarkjs' | 'gnark';
+  configBaseUrl?: string;
   rpcTimeout?: number;
 }
 
@@ -62,6 +63,7 @@ const Zkp2pProvider = ({
   children,
   witnessUrl = 'https://witness-proxy.zkp2p.xyz',
   zkEngine = 'snarkjs',
+  configBaseUrl = 'https://raw.githubusercontent.com/zkp2p/providers/main/',
   rpcTimeout = 30_000,
 }: Zkp2pProviderProps) => {
   /* ---------- auth state ---------- */
@@ -113,14 +115,12 @@ const Zkp2pProvider = ({
 
   const fetchProviderConfig = useCallback(
     async (platform: string, actionType: string) => {
-      // const base = 'https://raw.githubusercontent.com/zkp2p/providers/main/';
-      const base = 'http://localhost:8080/';
-      const res = await fetch(`${base}${platform}/${actionType}.json`);
+      const res = await fetch(`${configBaseUrl}${platform}/${actionType}.json`);
       console.log('res', res);
       if (!res.ok) throw new Error(`Provider config HTTP ${res.status}`);
       return (await res.json()) as ProviderSettings;
     },
-    []
+    [configBaseUrl]
   );
 
   const restoreSessionWith = useCallback(

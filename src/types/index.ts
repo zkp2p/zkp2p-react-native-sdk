@@ -21,7 +21,6 @@ export interface Zkp2pClientOptions {
   chainId: number;
   baseApiUrl?: string;
   witnessUrl?: string;
-  /** Optional RPC URL used to instantiate the public client. */
   rpcUrl?: string;
   logLevel?: 'silent' | 'error' | 'info' | 'debug';
   pollingInterval?: number; // ms
@@ -391,3 +390,19 @@ export interface NetworkEvent {
     body: string | null;
   };
 }
+
+export type RPCResponse = {
+  module: 'attestor-core';
+  id: string;
+  type: string;
+  response?: any;
+  step?: any;
+  error?: { data: { message: string; stack?: string } };
+};
+
+export type PendingEntry = {
+  resolve: (r: RPCResponse) => void;
+  reject: (e: Error) => void;
+  timeout: NodeJS.Timeout;
+  onStep?: (step: RPCResponse) => void;
+};

@@ -5,13 +5,6 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
-
-/**
- * Zkp2pProvider exposes authentication flows and proof generation utilities
- * to descendant components via React context.
- * Network requests are intercepted using a WebView to gather data required
- * for proof generation.
- */
 import type { ReactNode } from 'react';
 import { Modal, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -27,6 +20,9 @@ import {
   type ProviderSettings,
   type ExtractedItemsList,
   type Zkp2pClientOptions,
+  type PendingEntry,
+  type NetworkEvent,
+  type RPCResponse,
 } from '../types';
 import { Zkp2pClient } from '../client';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
@@ -37,33 +33,6 @@ import type { WebViewErrorEvent } from 'react-native-webview/lib/WebViewTypes';
 import CookieManager from '@react-native-cookies/cookies';
 
 import Zkp2pContext from './Zkp2pContext';
-
-export interface NetworkEvent {
-  type: 'network';
-  api: 'fetch' | 'xhr' | 'html';
-  request: {
-    url: string;
-    method?: string;
-    headers: Record<string, string>;
-    body?: string | null;
-    cookie: string | null;
-  };
-  response: {
-    url: string;
-    status: number;
-    headers: Record<string, string>;
-    body: string | null;
-  };
-}
-
-interface WindowRPCResponse {
-  module: 'attestor-core';
-  id: string;
-  type: string;
-  response?: any;
-  step?: any;
-  error?: { data: { message: string; stack?: string } };
-}
 
 interface Zkp2pProviderProps {
   children: ReactNode;
@@ -91,8 +60,6 @@ const Zkp2pProvider = ({
   chainId = 8453,
   baseApiUrl = 'https://api-staging.zkp2p.xyz/v1',
 }: Zkp2pProviderProps) => {
-  /* ---------- ZKP2P Client Initialization ---------- */
-
   const zkp2pClient = useMemo(() => {
     if (!apiKey) {
       console.warn('apiKey missing');
@@ -110,7 +77,12 @@ const Zkp2pProvider = ({
     return new Zkp2pClient(clientOptions);
   }, [walletClient, apiKey, chainId, witnessUrl, baseApiUrl]);
 
-  /* ---------- auth state ---------- */
+  const rpcWebViewRef = useRef<WebView>(null);
+  const pending = useRef<Record<string, PendingEntry>>({});
+
+  /*
+   * State
+   */
   const [provider, setProvider] = useState<ProviderSettings | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<Error | null>(null);
@@ -123,7 +95,12 @@ const Zkp2pProvider = ({
   const [interceptedPayload, setInterceptedPayload] =
     useState<NetworkEvent | null>(null);
   const [itemsList, setItemsList] = useState<ExtractedItemsList[]>([]);
+  const [isGeneratingProof, setIsGeneratingProof] = useState(false);
+  const [claimData, setClaimData] = useState<CreateClaimResponse | null>(null);
 
+  /*
+   * Methods
+   */
   const fetchProviderConfig = useCallback(
     async (platform: string, actionType: string) => {
       const res = await fetch(`${configBaseUrl}${platform}/${actionType}.json`);
@@ -217,7 +194,6 @@ const Zkp2pProvider = ({
             maxBodyBytes: 10 * 1024 * 1024,
           },
           style: { flex: 1 },
-          /* …inside setAuthWebViewProps({...}) */
           onIntercept: async (evt: NetworkEvent) => {
             console.log('onIntercept', evt);
             const { metadata } = cfg;
@@ -247,7 +223,6 @@ const Zkp2pProvider = ({
 
             try {
               if (primaryHit) {
-                /* primary request → body is already there */
                 const raw = metadata.preprocessRegex
                   ? ((evt.response.body ?? '').match(
                       new RegExp(metadata.preprocessRegex)
@@ -290,7 +265,6 @@ const Zkp2pProvider = ({
                 jsonBody = await resp.json();
               }
 
-              /* ───── 4. extract, store & advance UI ───── */
               let txs: ExtractedItemsList[] = [];
               txs = extractItemsList(jsonBody, cfg);
               if (txs.length === 0) {
@@ -327,23 +301,12 @@ const Zkp2pProvider = ({
 
   const closeAuthWebView = () => setAuthWebViewProps(null);
 
-  /* ---------- RPC plumbing ---------- */
-  type PendingEntry = {
-    resolve: (r: WindowRPCResponse) => void;
-    reject: (e: Error) => void;
-    timeout: NodeJS.Timeout;
-    onStep?: (step: WindowRPCResponse) => void;
-  };
-
-  const rpcWebViewRef = useRef<WebView>(null);
-  const pending = useRef<Record<string, PendingEntry>>({});
-
   const rpcRequest = useCallback(
     async (
       type: 'createClaim',
       req: RPCCreateClaimOptions,
-      onStep?: (msg: WindowRPCResponse) => void
-    ): Promise<WindowRPCResponse> => {
+      onStep?: (msg: RPCResponse) => void
+    ): Promise<RPCResponse> => {
       if (!rpcWebViewRef.current) throw new Error('RPC WebView not ready');
 
       const id = Math.random().toString(16).slice(2);
@@ -355,7 +318,7 @@ const Zkp2pProvider = ({
         request: req,
       };
 
-      const promise = new Promise<WindowRPCResponse>((resolve, reject) => {
+      const promise = new Promise<RPCResponse>((resolve, reject) => {
         const timeout = setTimeout(() => {
           delete pending.current[id];
           reject(new Error('RPC timeout'));
@@ -375,7 +338,7 @@ const Zkp2pProvider = ({
   const onRpcMessage = useCallback((e: WebViewMessageEvent) => {
     console.log('dataNative', e.nativeEvent.data);
     try {
-      const data: WindowRPCResponse = JSON.parse(e.nativeEvent.data);
+      const data: RPCResponse = JSON.parse(e.nativeEvent.data);
       console.log('RPC WebView message:', data);
 
       if (!data.module || data.module !== 'attestor-core') {
@@ -409,10 +372,6 @@ const Zkp2pProvider = ({
     witnessUrl,
     onMessage: onRpcMessage,
   } as const;
-
-  /* ---------- proof generation ---------- */
-  const [isGeneratingProof, setIsGeneratingProof] = useState(false);
-  const [claimData, setClaimData] = useState<CreateClaimResponse | null>(null);
 
   const generateProof = useCallback(
     async (
@@ -504,9 +463,7 @@ const Zkp2pProvider = ({
         console.log('RPC request:', rpc);
         const res = await rpcRequest('createClaim', rpc);
         console.log('RPC response:', res);
-        setClaimData(
-          res.response?.claimData ?? res.response?.reclaimData ?? null
-        );
+        setClaimData(res.response?.claimData ?? null);
         return res;
       } finally {
         setIsGeneratingProof(false);
@@ -516,7 +473,9 @@ const Zkp2pProvider = ({
     [rpcRequest, zkEngine, witnessUrl]
   );
 
-  /* cleanup */
+  /*
+   * Effects
+   */
   useEffect(
     () => () => {
       Object.values(pending.current).forEach(({ reject, timeout }) => {
@@ -527,6 +486,9 @@ const Zkp2pProvider = ({
     []
   );
 
+  /*
+   * Component
+   */
   return (
     <Zkp2pContext.Provider
       value={{
@@ -586,7 +548,7 @@ const styles = StyleSheet.create({
   },
   nativeWebviewContainer: {
     width: '100%',
-    height: '90%', // covers most of the screen, like a native sheet
+    height: '90%',
     backgroundColor: '#fff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,

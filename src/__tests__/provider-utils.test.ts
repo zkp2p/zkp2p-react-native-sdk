@@ -17,7 +17,7 @@ describe('extractItemsList', () => {
       fallbackMethod: 'GET',
       preprocessRegex: '',
       transactionsExtraction: {
-        transactionJsonPathListSelector: '$.txs[*]',
+        transactionJsonPathListSelector: '$.txs',
         transactionJsonPathSelectors: {
           id: '$.id',
           amount: '$.amount',

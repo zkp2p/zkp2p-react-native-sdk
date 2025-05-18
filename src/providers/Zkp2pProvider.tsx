@@ -124,7 +124,6 @@ const Zkp2pProvider = ({
     useState<NetworkEvent | null>(null);
   const [itemsList, setItemsList] = useState<ExtractedItemsList[]>([]);
 
-
   const fetchProviderConfig = useCallback(
     async (platform: string, actionType: string) => {
       const res = await fetch(`${configBaseUrl}${platform}/${actionType}.json`);
@@ -182,7 +181,7 @@ const Zkp2pProvider = ({
       setIsAuthenticated(true);
       return true;
     },
-    [setInterceptedPayload, setItemsList, setIsAuthenticated, extractItemsList]
+    [setInterceptedPayload, setItemsList, setIsAuthenticated]
   );
 
   const startAuthentication = useCallback(
@@ -323,7 +322,7 @@ const Zkp2pProvider = ({
         setIsAuthenticating(false);
       }
     },
-    [fetchProviderConfig, restoreSessionWith, extractItemsList]
+    [fetchProviderConfig, restoreSessionWith]
   );
 
   const closeAuthWebView = () => setAuthWebViewProps(null);

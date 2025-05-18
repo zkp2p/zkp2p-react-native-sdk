@@ -9,17 +9,16 @@ import type { ExtractedItemsList } from '../../src/types';
 // Viem for local wallet client
 import { createWalletClient, http } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { base } from 'viem/chains'; // Example chain for the local client
+import { base } from 'viem/chains';
 
-const ZKP2P_API_KEY = process.env.ZKP2P_API_KEY;
+const ZKP2P_API_KEY = 'your-api-key';
 
-// Create a local, ephemeral wallet client
 const privateKey = generatePrivateKey();
 const account = privateKeyToAccount(privateKey);
 const ephemeralWalletClient = createWalletClient({
   account,
-  chain: base, // Using mainnet as an example for the local client
-  transport: http(), // Or your preferred transport for local operations if any
+  chain: base,
+  transport: http(),
 });
 const ephemeralChainId = base.id;
 
@@ -51,16 +50,6 @@ function AppContent() {
       console.log(
         'ZKP2P Client is initialized with ephemeral wallet and available via useZkp2p()'
       );
-      const quote = zkp2pClient.getQuote({
-        exactFiatAmount: '1000000',
-        fiatCurrency: 'USD',
-        user: '0x0000000000000000000000000000000000000000',
-        recipient: '0x0000000000000000000000000000000000000000',
-        destinationChainId: 8453,
-        destinationToken: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-        paymentPlatforms: ['venmo'],
-      });
-      console.log('quote', quote);
     }
   }, [zkp2pClient]);
 

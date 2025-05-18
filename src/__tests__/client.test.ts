@@ -23,12 +23,12 @@ describe('Zkp2pClient', () => {
           apiKey: 'key',
           chainId: 99999,
         })
-    ).toThrow('public client');
+    ).toThrow('Unsupported chainId 99999 for ZKP2P contracts.');
   });
 
   it('uses custom rpcUrl when provided', () => {
     const rpcUrl = 'https://rpc.example.com';
-    new Zkp2pClient({
+    const client = new Zkp2pClient({
       walletClient,
       apiKey: 'key',
       chainId: base.id,
@@ -38,5 +38,8 @@ describe('Zkp2pClient', () => {
       chain: base,
       transport: http(rpcUrl),
     });
+
+    expect(client.apiKey).toBe('key');
+    expect(client.chainId).toBe(base.id);
   });
 });

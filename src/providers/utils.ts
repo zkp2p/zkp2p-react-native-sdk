@@ -12,7 +12,7 @@ export const safeStringify = (v: unknown): string =>
  * Returns an empty array on errors.
  */
 export const extractItemsList = (
-  json: unknown,
+  json: any,
   cfg: ProviderSettings
 ): ExtractedItemsList[] => {
   const txCfg = cfg.metadata.transactionsExtraction;
@@ -25,9 +25,7 @@ export const extractItemsList = (
     if (!Array.isArray(list[0])) return [];
     return list[0].map((t: any, i: number) => {
       const row: Record<string, unknown> = {};
-      for (const [k, p] of Object.entries(
-        txCfg.transactionJsonPathSelectors
-      )) {
+      for (const [k, p] of Object.entries(txCfg.transactionJsonPathSelectors)) {
         row[k] = (
           JSONPath({ path: p, json: t, resultType: 'value' }) as any[]
         )[0];
@@ -42,4 +40,3 @@ export const extractItemsList = (
     return [];
   }
 };
-

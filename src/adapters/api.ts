@@ -16,14 +16,12 @@ import type {
   Deposit,
   Intent,
 } from '../types';
-import { getClient } from '../client';
 
 function headers() {
   return { 'Content-Type': 'application/json' } as const;
 }
 
-function headersWithApiKey() {
-  const { apiKey } = getClient();
+function createHeadersWithApiKey(apiKey: string) {
   return { 'Content-Type': 'application/json', 'x-api-key': apiKey } as const;
 }
 
@@ -71,12 +69,13 @@ function convertIntentDatesToObjects(intent: any): Intent {
 }
 
 export async function apiSignalIntent(
-  req: IntentSignalRequest
+  req: IntentSignalRequest,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<SignalIntentResponse> {
-  const { baseApiUrl } = getClient();
   const res = await fetch(`${baseApiUrl}/verify/intent`, {
     method: 'POST',
-    headers: headersWithApiKey(),
+    headers: createHeadersWithApiKey(apiKey),
     body: JSON.stringify(req),
   });
   if (!res.ok) {
@@ -87,12 +86,13 @@ export async function apiSignalIntent(
 }
 
 export async function apiPostDepositDetails(
-  req: PostDepositDetailsRequest
+  req: PostDepositDetailsRequest,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<PostDepositDetailsResponse> {
-  const { baseApiUrl } = getClient();
   const res = await fetch(`${baseApiUrl}/makers/create`, {
     method: 'POST',
-    headers: headersWithApiKey(),
+    headers: createHeadersWithApiKey(apiKey),
     body: JSON.stringify(req),
   });
   if (!res.ok) {
@@ -103,9 +103,9 @@ export async function apiPostDepositDetails(
 }
 
 export async function apiGetQuote(
-  req: QuoteMaxTokenForFiatRequest
+  req: QuoteMaxTokenForFiatRequest,
+  baseApiUrl: string
 ): Promise<QuoteResponse> {
-  const { baseApiUrl } = getClient();
   const res = await fetch(`${baseApiUrl}/quote/exact-fiat`, {
     method: 'POST',
     headers: headers(),
@@ -119,14 +119,15 @@ export async function apiGetQuote(
 }
 
 export async function apiGetPayeeDetails(
-  req: GetPayeeDetailsRequest
+  req: GetPayeeDetailsRequest,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<GetPayeeDetailsResponse> {
-  const { baseApiUrl } = getClient();
   const res = await fetch(
     `${baseApiUrl}/makers/${req.platform}/${req.hashedOnchainId}`,
     {
       method: 'GET',
-      headers: headersWithApiKey(),
+      headers: createHeadersWithApiKey(apiKey),
     }
   );
   if (!res.ok) {
@@ -137,15 +138,16 @@ export async function apiGetPayeeDetails(
 }
 
 export async function apiGetOwnerDeposits(
-  req: GetOwnerDepositsRequest
+  req: GetOwnerDepositsRequest,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<GetOwnerDepositsResponse> {
-  const { baseApiUrl } = getClient();
   const url = new URL(`${baseApiUrl}/deposits/maker/${req.ownerAddress}`);
   if (req.status) url.searchParams.append('status', req.status);
 
   const res = await fetch(url.toString(), {
     method: 'GET',
-    headers: headersWithApiKey(),
+    headers: createHeadersWithApiKey(apiKey),
   });
   if (!res.ok) {
     const errorText = await res.text();
@@ -161,12 +163,13 @@ export async function apiGetOwnerDeposits(
 }
 
 export async function apiGetDepositOrders(
-  req: GetDepositOrdersRequest
+  req: GetDepositOrdersRequest,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<GetDepositOrdersResponse> {
-  const { baseApiUrl } = getClient();
   const res = await fetch(`${baseApiUrl}/orders/deposit/${req.depositId}`, {
     method: 'GET',
-    headers: headersWithApiKey(),
+    headers: createHeadersWithApiKey(apiKey),
   });
   if (!res.ok) {
     const errorText = await res.text();
@@ -182,12 +185,13 @@ export async function apiGetDepositOrders(
 }
 
 export async function apiGetDeposit(
-  req: GetDepositRequest
+  req: GetDepositRequest,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<GetDepositResponse> {
-  const { baseApiUrl } = getClient();
   const res = await fetch(`${baseApiUrl}/deposits/${req.depositId}`, {
     method: 'GET',
-    headers: headersWithApiKey(),
+    headers: createHeadersWithApiKey(apiKey),
   });
   if (!res.ok) {
     const errorText = await res.text();

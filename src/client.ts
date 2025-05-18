@@ -1,5 +1,6 @@
 import type { Address, Hash, PublicClient, WalletClient, Chain } from 'viem';
 import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
 import {
   DEPLOYED_ADDRESSES,
   DEFAULT_BASE_API_URL,
@@ -40,7 +41,7 @@ export class Zkp2pClient {
   readonly chainId: number;
   readonly baseApiUrl: string;
   readonly witnessUrl: string;
-  readonly addresses: { ESCROW: Address };
+  readonly addresses: { escrow: Address };
   readonly publicClient: PublicClient;
 
   constructor(opts: Zkp2pClientOptions) {
@@ -50,27 +51,42 @@ export class Zkp2pClient {
     this.baseApiUrl = opts.baseApiUrl || DEFAULT_BASE_API_URL;
     this.witnessUrl = opts.witnessUrl || DEFAULT_WITNESS_URL;
 
-    const addresses = DEPLOYED_ADDRESSES[this.chainId];
-    if (!addresses?.ESCROW)
-      throw new Error(`Unsupported chainId ${opts.chainId}`);
-    this.addresses = { ESCROW: addresses.ESCROW };
+    const contractAddresses = DEPLOYED_ADDRESSES[this.chainId];
+    if (!contractAddresses?.escrow)
+      throw new Error(
+        `Unsupported chainId ${opts.chainId} for ZKP2P contracts.`
+      );
+    this.addresses = { escrow: contractAddresses.escrow };
+
+    let selectedChainObject: Chain;
+    if (this.chainId === base.id) {
+      selectedChainObject = base;
+    }
+    // TODO: Add explicit support for other chains here if needed, e.g.:
+    // else if (this.chainId === mainnet.id) { selectedChainObject = mainnet; }
+    else {
+      // If the chainId doesn't match a pre-configured one (like Base),
+      // we cannot automatically provide a default RPC URL.
+      // Throw an error to indicate this configuration issue.
+      // The Zkp2pClientOptions could be extended in the future to allow passing a custom rpcUrl.
+      throw new Error(
+        `Zkp2pClient: The public client for chain ID ${this.chainId} is not configured with a default RPC URL. ` +
+          `Currently, only Base (ID: ${base.id}) is auto-configured. ` +
+          `Please use a supported chain or update client options to allow custom RPC URLs for the public client.`
+      );
+    }
 
     this.publicClient = createPublicClient({
-      chain: {
-        id: this.chainId,
-        name: 'Base',
-        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-        rpcUrls: { default: { http: [''] } },
-      } as Chain,
-      transport: http(),
-    }) as unknown as PublicClient;
+      chain: selectedChainObject,
+      transport: http(), // This will use the default RPC URL from selectedChainObject
+    }) as PublicClient;
   }
 
   async fulfillIntent(params: FulfillIntentParams): Promise<Hash> {
     return fulfillIntent(
       this.walletClient,
       this.publicClient,
-      this.addresses.ESCROW,
+      this.addresses.escrow,
       params
     );
   }
@@ -81,8 +97,10 @@ export class Zkp2pClient {
     return signalIntent(
       this.walletClient,
       this.publicClient,
-      this.addresses.ESCROW,
-      params
+      this.addresses.escrow,
+      params,
+      this.apiKey,
+      this.baseApiUrl
     );
   }
 
@@ -92,48 +110,37 @@ export class Zkp2pClient {
     return createDeposit(
       this.walletClient,
       this.publicClient,
-      this.addresses.ESCROW,
+      this.addresses.escrow,
       this.chainId,
-      params
+      params,
+      this.apiKey,
+      this.baseApiUrl
     );
   }
 
   async getQuote(params: QuoteMaxTokenForFiatRequest): Promise<QuoteResponse> {
-    return apiGetQuote(params);
+    return apiGetQuote(params, this.baseApiUrl);
   }
 
   async getPayeeDetails(
     params: GetPayeeDetailsRequest
   ): Promise<GetPayeeDetailsResponse> {
-    return apiGetPayeeDetails(params);
+    return apiGetPayeeDetails(params, this.apiKey, this.baseApiUrl);
   }
 
   async getOwnerDeposits(
     params: GetOwnerDepositsRequest
   ): Promise<GetOwnerDepositsResponse> {
-    return apiGetOwnerDeposits(params);
+    return apiGetOwnerDeposits(params, this.apiKey, this.baseApiUrl);
   }
 
   async getDepositOrders(
     params: GetDepositOrdersRequest
   ): Promise<GetDepositOrdersResponse> {
-    return apiGetDepositOrders(params);
+    return apiGetDepositOrders(params, this.apiKey, this.baseApiUrl);
   }
 
   async getDeposit(params: GetDepositRequest): Promise<GetDepositResponse> {
-    return apiGetDeposit(params);
+    return apiGetDeposit(params, this.apiKey, this.baseApiUrl);
   }
 }
-
-let _client: Zkp2pClient | undefined;
-export const createClient = (opts: {
-  walletClient: WalletClient;
-  apiKey: string;
-  chainId: number;
-  baseApiUrl?: string;
-  witnessUrl?: string;
-}) => (_client = new Zkp2pClient(opts));
-export const getClient = () => {
-  if (!_client) throw new Error('ZKP2P client not initialised');
-  return _client;
-};

@@ -1,4 +1,10 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+} from 'react';
 import type { ReactNode } from 'react';
 import { Modal, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -8,8 +14,14 @@ import {
   type RPCCreateClaimOptions,
   type CreateClaimResponse,
 } from '@zkp2p/reclaim-witness-sdk';
+import type { WalletClient } from 'viem';
 import { DEFAULT_USER_AGENT } from '../utils/constants';
-import { type ProviderSettings, type ExtractedItemsList } from '../types';
+import {
+  type ProviderSettings,
+  type ExtractedItemsList,
+  type Zkp2pClientOptions,
+} from '../types';
+import { Zkp2pClient } from '../client';
 import { JSONPath } from 'jsonpath-plus';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
 import { RPCWebView } from '../components/RPCWebView';
@@ -51,9 +63,13 @@ const safeStringify = (v: unknown) =>
 interface Zkp2pProviderProps {
   children: ReactNode;
   witnessUrl?: string;
-  zkEngine?: 'snarkjs' | 'gnark';
+  zkEngine?: 'snarkjs';
   configBaseUrl?: string;
   rpcTimeout?: number;
+  walletClient: WalletClient;
+  apiKey?: string;
+  chainId?: number;
+  baseApiUrl?: string;
 }
 
 export interface AuthWVOverrides
@@ -65,7 +81,30 @@ const Zkp2pProvider = ({
   zkEngine = 'snarkjs',
   configBaseUrl = 'https://raw.githubusercontent.com/zkp2p/providers/main/',
   rpcTimeout = 30_000,
+  walletClient,
+  apiKey,
+  chainId = 8453,
+  baseApiUrl = 'https://api-staging.zkp2p.xyz/v1',
 }: Zkp2pProviderProps) => {
+  /* ---------- ZKP2P Client Initialization ---------- */
+
+  const zkp2pClient = useMemo(() => {
+    if (!apiKey) {
+      console.warn('apiKey missing');
+      return null;
+    }
+    const clientOptions: Zkp2pClientOptions = {
+      walletClient,
+      apiKey,
+      chainId,
+      witnessUrl, // witnessUrl from props is passed here
+    };
+    if (baseApiUrl) {
+      clientOptions.baseApiUrl = baseApiUrl;
+    }
+    return new Zkp2pClient(clientOptions);
+  }, [walletClient, apiKey, chainId, witnessUrl, baseApiUrl]);
+
   /* ---------- auth state ---------- */
   const [provider, setProvider] = useState<ProviderSettings | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -531,6 +570,7 @@ const Zkp2pProvider = ({
         generateProof,
         isGeneratingProof,
         claimData,
+        zkp2pClient,
       }}
     >
       {children}

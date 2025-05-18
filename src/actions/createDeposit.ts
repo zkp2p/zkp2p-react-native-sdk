@@ -13,7 +13,9 @@ export async function createDeposit(
   publicClient: PublicClient,
   escrowAddress: string,
   chainId: number,
-  params: CreateDepositParams
+  params: CreateDepositParams,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<{ depositDetails: PostDepositDetailsRequest[]; hash: Hash }> {
   try {
     // First, call the API to create deposit details
@@ -24,10 +26,14 @@ export async function createDeposit(
             'depositData must have the same length as processorNames'
           );
         }
-        return apiPostDepositDetails({
-          depositData: params.depositData[index] || {},
-          processorName,
-        });
+        return apiPostDepositDetails(
+          {
+            depositData: params.depositData[index] || {},
+            processorName,
+          },
+          apiKey,
+          baseApiUrl
+        );
       })
     );
     if (!apiResponses.every((response) => response.success)) {

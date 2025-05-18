@@ -11,7 +11,9 @@ export async function signalIntent(
   walletClient: WalletClient,
   publicClient: PublicClient,
   escrowAddress: string,
-  params: SignalIntentParams
+  params: SignalIntentParams,
+  apiKey: string,
+  baseApiUrl: string
 ): Promise<SignalIntentResponse & { txHash?: Hash }> {
   try {
     // First, call the API to verify and get signed intent
@@ -24,7 +26,7 @@ export async function signalIntent(
       fiatCurrencyCode: params.fiatCurrencyCode,
       chainId: params.chainId,
     };
-    const apiResponse = await apiSignalIntent(apiRequest);
+    const apiResponse = await apiSignalIntent(apiRequest, apiKey, baseApiUrl);
     if (!apiResponse.success) {
       throw new Error(apiResponse.message);
     }

@@ -5,6 +5,7 @@ import type {
   ExtractedItemsList,
 } from '../types';
 import type { CreateClaimResponse } from '@zkp2p/reclaim-witness-sdk';
+import type { Zkp2pClient } from '../client';
 
 export interface Zkp2pValues {
   /* auth */
@@ -35,6 +36,9 @@ export interface Zkp2pValues {
     | null;
   isGeneratingProof: boolean;
   claimData: CreateClaimResponse | null;
+
+  /* client */
+  zkp2pClient: Zkp2pClient | null;
 }
 
 const defaultValues: Zkp2pValues = {
@@ -50,6 +54,7 @@ const defaultValues: Zkp2pValues = {
   generateProof: null,
   isGeneratingProof: false,
   claimData: null,
+  zkp2pClient: null,
 };
 
 const Zkp2pContext = createContext<Zkp2pValues>(defaultValues);

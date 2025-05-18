@@ -44,6 +44,11 @@ export class Zkp2pClient {
   readonly addresses: { escrow: Address };
   readonly publicClient: PublicClient;
 
+  /**
+   * Creates a new Zkp2pClient instance.
+   *
+   * @param opts configuration options including wallet client and API key
+   */
   constructor(opts: Zkp2pClientOptions) {
     this.walletClient = opts.walletClient;
     this.apiKey = opts.apiKey;
@@ -61,10 +66,7 @@ export class Zkp2pClient {
     let selectedChainObject: Chain;
     if (this.chainId === base.id) {
       selectedChainObject = base;
-    }
-    // TODO: Add explicit support for other chains here if needed, e.g.:
-    // else if (this.chainId === mainnet.id) { selectedChainObject = mainnet; }
-    else {
+    } else {
       // If the chainId doesn't match a pre-configured one (like Base),
       // we cannot automatically provide a default RPC URL.
       // Throw an error to indicate this configuration issue.
@@ -72,16 +74,19 @@ export class Zkp2pClient {
       throw new Error(
         `Zkp2pClient: The public client for chain ID ${this.chainId} is not configured with a default RPC URL. ` +
           `Currently, only Base (ID: ${base.id}) is auto-configured. ` +
-          `Please use a supported chain or update client options to allow custom RPC URLs for the public client.`
+          `Please use a supported chain or supply the rpcUrl option.`
       );
     }
 
     this.publicClient = createPublicClient({
       chain: selectedChainObject,
-      transport: http(), // This will use the default RPC URL from selectedChainObject
+      transport: http(opts.rpcUrl), // allow overriding the default RPC URL
     }) as PublicClient;
   }
 
+  /**
+   * Calls the escrow contract to fulfill a previously signalled intent.
+   */
   async fulfillIntent(params: FulfillIntentParams): Promise<Hash> {
     return fulfillIntent(
       this.walletClient,
@@ -91,6 +96,9 @@ export class Zkp2pClient {
     );
   }
 
+  /**
+   * Signals an intent to off-chain services and emits the corresponding on-chain event.
+   */
   async signalIntent(
     params: SignalIntentParams
   ): Promise<SignalIntentResponse & { txHash?: Hash }> {
@@ -104,6 +112,9 @@ export class Zkp2pClient {
     );
   }
 
+  /**
+   * Creates a deposit on-chain and stores deposit details via the API.
+   */
   async createDeposit(
     params: CreateDepositParams
   ): Promise<{ depositDetails: PostDepositDetailsRequest[]; hash: Hash }> {
@@ -118,28 +129,35 @@ export class Zkp2pClient {
     );
   }
 
+  /**
+   * Retrieve a token quote for a given fiat amount.
+   */
   async getQuote(params: QuoteMaxTokenForFiatRequest): Promise<QuoteResponse> {
     return apiGetQuote(params, this.baseApiUrl);
   }
 
+  /** Fetch details about a payee via the API. */
   async getPayeeDetails(
     params: GetPayeeDetailsRequest
   ): Promise<GetPayeeDetailsResponse> {
     return apiGetPayeeDetails(params, this.apiKey, this.baseApiUrl);
   }
 
+  /** Retrieve deposits owned by an address. */
   async getOwnerDeposits(
     params: GetOwnerDepositsRequest
   ): Promise<GetOwnerDepositsResponse> {
     return apiGetOwnerDeposits(params, this.apiKey, this.baseApiUrl);
   }
 
+  /** Get orders associated with a specific deposit. */
   async getDepositOrders(
     params: GetDepositOrdersRequest
   ): Promise<GetDepositOrdersResponse> {
     return apiGetDepositOrders(params, this.apiKey, this.baseApiUrl);
   }
 
+  /** Get information about a single deposit. */
   async getDeposit(params: GetDepositRequest): Promise<GetDepositResponse> {
     return apiGetDeposit(params, this.apiKey, this.baseApiUrl);
   }

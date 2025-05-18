@@ -5,6 +5,13 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
+
+/**
+ * Zkp2pProvider exposes authentication flows and proof generation utilities
+ * to descendant components via React context.
+ * Network requests are intercepted using a WebView to gather data required
+ * for proof generation.
+ */
 import type { ReactNode } from 'react';
 import { Modal, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -22,8 +29,9 @@ import {
   type Zkp2pClientOptions,
 } from '../types';
 import { Zkp2pClient } from '../client';
-import { JSONPath } from 'jsonpath-plus';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
+import { JSONPath } from 'jsonpath-plus';
+import { extractItemsList, safeStringify } from './utils';
 import { RPCWebView } from '../components/RPCWebView';
 import type { WebViewErrorEvent } from 'react-native-webview/lib/WebViewTypes';
 import CookieManager from '@react-native-cookies/cookies';
@@ -56,9 +64,6 @@ interface WindowRPCResponse {
   step?: any;
   error?: { data: { message: string; stack?: string } };
 }
-
-const safeStringify = (v: unknown) =>
-  JSON.stringify(v, (_, val) => (typeof val === 'function' ? undefined : val));
 
 interface Zkp2pProviderProps {
   children: ReactNode;
@@ -119,38 +124,6 @@ const Zkp2pProvider = ({
     useState<NetworkEvent | null>(null);
   const [itemsList, setItemsList] = useState<ExtractedItemsList[]>([]);
 
-  const extractItemsList = useCallback(
-    (json: any, cfg: ProviderSettings): ExtractedItemsList[] => {
-      const txCfg = cfg.metadata.transactionsExtraction;
-      if (!txCfg) return [];
-      try {
-        const list = JSONPath({
-          path: cfg.metadata.transactionsExtraction
-            .transactionJsonPathListSelector,
-          json,
-        });
-        if (!Array.isArray(list[0])) return [];
-        return list[0].map((t, i) => {
-          const row: Record<string, any> = {};
-          for (const [k, p] of Object.entries(
-            txCfg.transactionJsonPathSelectors
-          )) {
-            row[k] = (
-              JSONPath({ path: p, json: t, resultType: 'value' }) as any[]
-            )[0];
-          }
-          return {
-            ...row,
-            hidden: Object.values(row).some((v) => v == null),
-            originalIndex: i,
-          };
-        });
-      } catch (err: any) {
-        return [];
-      }
-    },
-    []
-  );
 
   const fetchProviderConfig = useCallback(
     async (platform: string, actionType: string) => {

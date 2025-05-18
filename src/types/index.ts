@@ -21,6 +21,8 @@ export interface Zkp2pClientOptions {
   chainId: number;
   baseApiUrl?: string;
   witnessUrl?: string;
+  /** Optional RPC URL used to instantiate the public client. */
+  rpcUrl?: string;
   logLevel?: 'silent' | 'error' | 'info' | 'debug';
   pollingInterval?: number; // ms
 }

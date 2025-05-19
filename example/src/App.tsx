@@ -1,28 +1,25 @@
 import { useState, useEffect } from 'react';
-import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
+import {
+  SafeAreaView,
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
 import { Zkp2pProvider, useZkp2p } from 'zkp2p-react-native-sdk';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
 import { TransactionScreen } from './screens/TransactionScreen';
 import { ProofScreen } from './screens/ProofScreen';
 import type { ExtractedItemsList } from '../../src/types';
 
-// Viem for local wallet client
-import { createWalletClient, http } from 'viem';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+// Wallet connection via WalletConnect
+import EthereumProvider from '@walletconnect/ethereum-provider';
+import { createWalletClient, custom, type WalletClient } from 'viem';
 import { base } from 'viem/chains';
 
 const ZKP2P_API_KEY = 'your-api-key';
 
-const privateKey = generatePrivateKey();
-const account = privateKeyToAccount(privateKey);
-const ephemeralWalletClient = createWalletClient({
-  account,
-  chain: base,
-  transport: http(),
-});
-const ephemeralChainId = base.id;
-
-console.log(`Using ephemeral account: ${account.address}`);
+const WALLETCONNECT_PROJECT_ID = 'your-wc-project-id';
 
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState<
@@ -48,7 +45,7 @@ function AppContent() {
   useEffect(() => {
     if (zkp2pClient) {
       console.log(
-        'ZKP2P Client is initialized with ephemeral wallet and available via useZkp2p()'
+        'ZKP2P Client is initialized with connected wallet and available via useZkp2p()'
       );
     }
   }, [zkp2pClient]);
@@ -129,11 +126,42 @@ function AppContent() {
 }
 
 export default function App() {
+  const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
+
+  const connectWallet = async () => {
+    try {
+      const provider = await EthereumProvider.init({
+        projectId: WALLETCONNECT_PROJECT_ID,
+        showQrModal: true,
+        chains: [base.id],
+      });
+      await provider.enable();
+      const wc = createWalletClient({
+        account: provider.accounts[0] as `0x${string}`,
+        chain: base,
+        transport: custom(provider),
+      });
+      setWalletClient(wc);
+    } catch (err) {
+      console.error('Wallet connection failed', err);
+    }
+  };
+
+  if (!walletClient) {
+    return (
+      <SafeAreaView style={styles.centerContainer}>
+        <TouchableOpacity style={styles.button} onPress={connectWallet}>
+          <Text style={styles.buttonText}>Connect Wallet</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <Zkp2pProvider
-      walletClient={ephemeralWalletClient as any}
+      walletClient={walletClient}
       apiKey={ZKP2P_API_KEY}
-      chainId={ephemeralChainId}
+      chainId={base.id}
       witnessUrl="https://witness-proxy.zkp2p.xyz"
       zkEngine="snarkjs"
       rpcTimeout={30000}
@@ -152,6 +180,14 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   errorText: {
     color: 'red',
     fontSize: 16,

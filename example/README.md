@@ -18,6 +18,8 @@ This example app demonstrates the usage of the ZKP2P React Native SDK, showcasin
    - RPC communication
    - Proof generation with selected transaction
    - Error handling and loading states
+4. **Wallet Connection**
+   - Connects to external wallets using WalletConnect
 
 ## Setup
 

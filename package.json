@@ -123,14 +123,7 @@
     "github": {
       "release": true
     },
-    "preRelease": "rc",
-    "plugins": {
-      "@release-it/conventional-changelog": {
-        "preset": {
-          "name": "conventionalcommits"
-        }
-      }
-    }
+    "plugins": {}
   },
   "prettier": {
     "quoteProps": "consistent",

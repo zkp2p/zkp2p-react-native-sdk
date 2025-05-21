@@ -1,6 +1,7 @@
-import type { WalletClient, TransactionReceipt, Hash } from 'viem';
-import type { Range, Currency } from './contract';
+import type { WalletClient, Hash } from 'viem';
+import type { Range } from './contract';
 import type { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
+import type { CurrencyType } from '../utils/currency';
 
 export interface AuthWVOverrides
   extends Partial<React.ComponentProps<typeof InterceptWebView>> {}
@@ -28,6 +29,7 @@ export interface Zkp2pClientOptions {
 
 export type TxCallbackParams = {
   hash: Hash;
+  data?: any;
 };
 
 export type ActionCallback = (params: TxCallbackParams) => void;
@@ -37,6 +39,28 @@ export type FulfillIntentParams = {
   intentHash: Hash;
   onSuccess?: ActionCallback;
   onError?: (error: Error) => void;
+  onMined?: ActionCallback;
+};
+
+export type CancelIntentParams = {
+  intentHash: Hash;
+  onSuccess?: ActionCallback;
+  onError?: (error: Error) => void;
+  onMined?: ActionCallback;
+};
+
+export type ReleaseFundsToPayerParams = {
+  intentHash: Hash;
+  onSuccess?: ActionCallback;
+  onError?: (error: Error) => void;
+  onMined?: ActionCallback;
+};
+
+export type WithdrawDepositParams = {
+  depositId: string;
+  onSuccess?: ActionCallback;
+  onError?: (error: Error) => void;
+  onMined?: ActionCallback;
 };
 
 export type SignalIntentParams = {
@@ -45,41 +69,25 @@ export type SignalIntentParams = {
   tokenAmount: string;
   payeeDetails: string;
   toAddress: string;
-  fiatCurrencyCode: string;
-  chainId: string;
+  currency: CurrencyType;
   onSuccess?: ActionCallback;
   onError?: (error: Error) => void;
+  onMined?: ActionCallback;
 };
 
 export type CreateDepositParams = {
   token: Address;
   amount: bigint;
   intentAmountRange: Range;
-  verifiers: Address[];
-  extraVerifierData: string[];
-  currencies: Currency[][];
+  conversionRates: { currency: CurrencyType; conversionRate: string }[];
   processorNames: string[];
   depositData: {
     [key: string]: string;
   }[];
   onSuccess?: ActionCallback;
   onError?: (error: Error) => void;
+  onMined?: ActionCallback;
 };
-
-export interface FulfillIntentResult {
-  hash: Address;
-  receipt?: TransactionReceipt;
-}
-
-export interface SignalIntentResult {
-  hash: Address;
-  receipt?: TransactionReceipt;
-}
-
-export interface CreateDepositResult {
-  hash: Address;
-  receipt?: TransactionReceipt;
-}
 
 export type IntentSignalRequest = {
   processorName: string;
@@ -253,7 +261,6 @@ export type Deposit = {
 
 export type GetOwnerDepositsRequest = {
   ownerAddress: string;
-  status?: DepositStatusType;
 };
 
 export type GetOwnerDepositsResponse = {
@@ -263,14 +270,32 @@ export type GetOwnerDepositsResponse = {
   statusCode: number;
 };
 
+export const IntentStatus = {
+  SIGNALED: 'SIGNALED',
+  FULFILLED: 'FULFILLED',
+  PRUNED: 'PRUNED',
+} as const;
+
+export type IntentStatusType = (typeof IntentStatus)[keyof typeof IntentStatus];
+
 export type Intent = {
-  id: string;
-  owner: string;
+  id: number;
+  intentHash: string;
+  status: IntentStatusType;
   depositId: string;
+  verifier: string;
+  owner: string;
+  toAddress: string;
   amount: string;
-  status: string;
+  fiatCurrency: string;
+  conversionRate: string;
+  sustainabilityFee: string | null;
+  verifierFee: string | null;
+  signalTxHash: string;
   signalTimestamp: Date;
+  fulfillTxHash: string | null;
   fulfillTimestamp: Date | null;
+  pruneTxHash: string | null;
   prunedTimestamp: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -316,6 +341,17 @@ export type GetDepositResponse = {
       }>;
     }>;
   };
+  statusCode: number;
+};
+
+export type GetOwnerIntentsRequest = {
+  ownerAddress: string;
+};
+
+export type GetOwnerIntentsResponse = {
+  success: boolean;
+  message: string;
+  responseObject: Intent[];
   statusCode: number;
 };
 
@@ -406,3 +442,10 @@ export type PendingEntry = {
   timeout: NodeJS.Timeout;
   onStep?: (step: RPCResponse) => void;
 };
+
+// Export on-chain view types
+export type {
+  EscrowRange,
+  EscrowDepositView,
+  EscrowIntentView,
+} from './escrowViews';

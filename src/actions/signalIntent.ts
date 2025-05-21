@@ -6,16 +6,22 @@ import type {
   SignalIntentResponse,
 } from '../types';
 import { apiSignalIntent } from '../adapters/api';
+import { currencyInfo } from '../utils/currency';
 
 export async function signalIntent(
   walletClient: WalletClient,
   publicClient: PublicClient,
   escrowAddress: string,
+  chainId: number,
   params: SignalIntentParams,
   apiKey: string,
   baseApiUrl: string
 ): Promise<SignalIntentResponse & { txHash?: Hash }> {
   try {
+    const currencyCodeHash = currencyInfo[params.currency]?.currencyCodeHash;
+    if (!currencyCodeHash) {
+      throw new Error(`Currency code ${params.currency} not found`);
+    }
     // First, call the API to verify and get signed intent
     const apiRequest: IntentSignalRequest = {
       processorName: params.processorName,
@@ -23,8 +29,8 @@ export async function signalIntent(
       tokenAmount: params.tokenAmount,
       payeeDetails: params.payeeDetails,
       toAddress: params.toAddress,
-      fiatCurrencyCode: params.fiatCurrencyCode,
-      chainId: params.chainId,
+      fiatCurrencyCode: currencyCodeHash,
+      chainId: chainId.toString(),
     };
     const apiResponse = await apiSignalIntent(apiRequest, apiKey, baseApiUrl);
     if (!apiResponse.success) {
@@ -53,6 +59,11 @@ export async function signalIntent(
 
     if (params.onSuccess) {
       params.onSuccess({ hash });
+    }
+
+    if (params.onMined) {
+      await publicClient.waitForTransactionReceipt({ hash });
+      params.onMined({ hash });
     }
 
     return { ...apiResponse, txHash: hash };

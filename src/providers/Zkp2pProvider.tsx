@@ -104,7 +104,6 @@ const Zkp2pProvider = ({
   const fetchProviderConfig = useCallback(
     async (platform: string, actionType: string) => {
       const res = await fetch(`${configBaseUrl}${platform}/${actionType}.json`);
-      console.log('res', res);
       if (!res.ok) throw new Error(`Provider config HTTP ${res.status}`);
       return (await res.json()) as ProviderSettings;
     },
@@ -147,8 +146,6 @@ const Zkp2pProvider = ({
         };
       }
       const res = await fetch(payload.request.url, replayOpts);
-
-      console.log('res', res);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await res.json();
@@ -259,9 +256,7 @@ const Zkp2pProvider = ({
                   };
                 }
 
-                console.log('replayOpts', replayOpts);
                 const resp = await fetch(cfg.url, replayOpts);
-                console.log('resp', resp);
                 jsonBody = await resp.json();
               }
 
@@ -527,6 +522,7 @@ const Zkp2pProvider = ({
               </View>
               <InterceptWebView
                 {...authWebViewProps}
+                // additionalCookieDomainsToInclude={['mercadolibre.com', 'www.mercadolibre.com']}
                 style={styles.nativeWebview}
               />
             </View>

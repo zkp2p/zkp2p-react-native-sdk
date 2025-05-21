@@ -1,4 +1,4 @@
-// index.ts ― updated
+import 'fast-text-encoding';
 import { useZkp2p } from './hooks/useZkp2p';
 import { Zkp2pProvider, Zkp2pContext } from './providers';
 
@@ -12,4 +12,27 @@ export type {
   FulfillIntentParams,
   SignalIntentResponse,
   AuthWVOverrides,
+  IntentStatusType,
+  Intent,
+  Deposit,
+  WithdrawDepositParams,
+  CancelIntentParams,
+  ReleaseFundsToPayerParams,
+  CreateDepositParams,
+  PostDepositDetailsRequest,
+  DepositVerifierData,
+  Currency,
+  GetOwnerDepositsRequest,
+  GetOwnerDepositsResponse,
+  GetDepositOrdersRequest,
+  GetDepositOrdersResponse,
+  GetDepositRequest,
+  GetDepositResponse,
+  GetOwnerIntentsRequest,
+  GetOwnerIntentsResponse,
+  IntentSignalRequest,
+  QuoteMaxTokenForFiatRequest,
+  QuoteResponse,
+  GetPayeeDetailsRequest,
+  GetPayeeDetailsResponse,
 } from './types';

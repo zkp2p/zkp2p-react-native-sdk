@@ -1,6 +1,6 @@
 import type { Address, Hash, PublicClient, WalletClient, Chain } from 'viem';
 import { createPublicClient, http } from 'viem';
-import { base } from 'viem/chains';
+import { base, hardhat } from 'viem/chains';
 import {
   DEPLOYED_ADDRESSES,
   DEFAULT_BASE_API_URL,
@@ -16,24 +16,25 @@ import type {
   QuoteResponse,
   GetPayeeDetailsRequest,
   GetPayeeDetailsResponse,
-  GetOwnerDepositsRequest,
-  GetOwnerDepositsResponse,
-  GetDepositOrdersRequest,
-  GetDepositOrdersResponse,
-  GetDepositRequest,
-  GetDepositResponse,
   PostDepositDetailsRequest,
+  WithdrawDepositParams,
+  CancelIntentParams,
+  ReleaseFundsToPayerParams,
+  EscrowDepositView,
+  EscrowIntentView,
 } from './types';
 import { fulfillIntent } from './actions/fulfillIntent';
 import { signalIntent } from './actions/signalIntent';
 import { createDeposit } from './actions/createDeposit';
+import { apiGetQuote, apiGetPayeeDetails } from './adapters/api';
+import { withdrawDeposit } from './actions/withdrawDeposit';
+import { cancelIntent } from './actions/cancelIntent';
+import { releaseFundsToPayer } from './actions/releaseFundsToPayer';
 import {
-  apiGetQuote,
-  apiGetPayeeDetails,
-  apiGetOwnerDeposits,
-  apiGetDepositOrders,
-  apiGetDeposit,
-} from './adapters/api';
+  parseEscrowDepositView,
+  parseEscrowIntentView,
+} from './utils/escrowViewParsers';
+import { ESCROW_ABI } from './utils/contracts';
 
 export class Zkp2pClient {
   readonly walletClient: WalletClient;
@@ -66,6 +67,8 @@ export class Zkp2pClient {
     let selectedChainObject: Chain;
     if (this.chainId === base.id) {
       selectedChainObject = base;
+    } else if (this.chainId === hardhat.id) {
+      selectedChainObject = hardhat;
     } else {
       // If the chainId doesn't match a pre-configured one (like Base),
       // we cannot automatically provide a default RPC URL.
@@ -73,7 +76,7 @@ export class Zkp2pClient {
       // The Zkp2pClientOptions could be extended in the future to allow passing a custom rpcUrl.
       throw new Error(
         `Zkp2pClient: The public client for chain ID ${this.chainId} is not configured with a default RPC URL. ` +
-          `Currently, only Base (ID: ${base.id}) is auto-configured. ` +
+          `Currently, only Base (ID: ${base.id}) and Hardhat (ID: ${hardhat.id}) are auto-configured. ` +
           `Please use a supported chain or supply the rpcUrl option.`
       );
     }
@@ -106,6 +109,7 @@ export class Zkp2pClient {
       this.walletClient,
       this.publicClient,
       this.addresses.escrow,
+      this.chainId,
       params,
       this.apiKey,
       this.baseApiUrl
@@ -130,6 +134,42 @@ export class Zkp2pClient {
   }
 
   /**
+   * Withdraws a deposit from the escrow contract.
+   */
+  async withdrawDeposit(params: WithdrawDepositParams): Promise<Hash> {
+    return withdrawDeposit(
+      this.walletClient,
+      this.publicClient,
+      this.addresses.escrow,
+      params
+    );
+  }
+
+  /**
+   * Cancels an intent.
+   */
+  async cancelIntent(params: CancelIntentParams): Promise<Hash> {
+    return cancelIntent(
+      this.walletClient,
+      this.publicClient,
+      this.addresses.escrow,
+      params
+    );
+  }
+
+  /**
+   * Releases funds to the payer.
+   */
+  async releaseFundsToPayer(params: ReleaseFundsToPayerParams): Promise<Hash> {
+    return releaseFundsToPayer(
+      this.walletClient,
+      this.publicClient,
+      this.addresses.escrow,
+      params
+    );
+  }
+
+  /**
    * Retrieve a token quote for a given fiat amount.
    */
   async getQuote(params: QuoteMaxTokenForFiatRequest): Promise<QuoteResponse> {
@@ -143,22 +183,61 @@ export class Zkp2pClient {
     return apiGetPayeeDetails(params, this.apiKey, this.baseApiUrl);
   }
 
-  /** Retrieve deposits owned by an address. */
-  async getOwnerDeposits(
-    params: GetOwnerDepositsRequest
-  ): Promise<GetOwnerDepositsResponse> {
-    return apiGetOwnerDeposits(params, this.apiKey, this.baseApiUrl);
+  /**
+   * Fetches and parses deposit views directly from the escrow contract for a given account.
+   */
+  async getAccountDeposits(
+    ownerAddress: Address
+  ): Promise<EscrowDepositView[]> {
+    if (!this.publicClient) {
+      throw new Error('Public client is not initialized.');
+    }
+    try {
+      const rawDepositViews = await this.publicClient.readContract({
+        address: this.addresses.escrow,
+        abi: ESCROW_ABI,
+        functionName: 'getAccountDeposits',
+        args: [ownerAddress],
+      });
+
+      if (!rawDepositViews) {
+        return [];
+      }
+      return rawDepositViews.map(parseEscrowDepositView);
+    } catch (error) {
+      console.error('Error fetching account deposit views:', error);
+      throw error;
+    }
   }
 
-  /** Get orders associated with a specific deposit. */
-  async getDepositOrders(
-    params: GetDepositOrdersRequest
-  ): Promise<GetDepositOrdersResponse> {
-    return apiGetDepositOrders(params, this.apiKey, this.baseApiUrl);
-  }
+  /**
+   * Fetches and parses intent views directly from the escrow contract for given intent hashes.
+   */
+  async getAccountIntent(
+    ownerAddress: Address
+  ): Promise<EscrowIntentView | null> {
+    if (!this.publicClient) {
+      throw new Error('Public client is not initialized.');
+    }
+    try {
+      const rawIntentViews = await this.publicClient.readContract({
+        address: this.addresses.escrow,
+        abi: ESCROW_ABI,
+        functionName: 'getAccountIntent',
+        args: [ownerAddress],
+      });
 
-  /** Get information about a single deposit. */
-  async getDeposit(params: GetDepositRequest): Promise<GetDepositResponse> {
-    return apiGetDeposit(params, this.apiKey, this.baseApiUrl);
+      if (
+        !rawIntentViews ||
+        rawIntentViews.intentHash ===
+          '0x0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
+        return null;
+      }
+      return parseEscrowIntentView(rawIntentViews);
+    } catch (error) {
+      console.error('Error fetching intent views:', error);
+      throw error; // Re-throw or handle more gracefully
+    }
   }
 }

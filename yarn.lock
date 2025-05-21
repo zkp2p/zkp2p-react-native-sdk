@@ -4640,16 +4640,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zkp2p/react-native-webview-intercept@npm:^0.3.6":
-  version: 0.3.6
-  resolution: "@zkp2p/react-native-webview-intercept@npm:0.3.6"
+"@zkp2p/react-native-webview-intercept@npm:^0.4.0":
+  version: 0.4.0
+  resolution: "@zkp2p/react-native-webview-intercept@npm:0.4.0"
   dependencies:
     "@react-native-cookies/cookies": ^6.2.1
     react-native-webview: ^13.13.5
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 761f26b7ddbe3801ec74d630487b1fe415e19e2fa4f0b975f3dcb5b960fcfa227b5dc05d249d064421695878993d0cdd95064072c0aa5d389c970919a7649287
+  checksum: 7db27e8a49c434b708f041054603a2bf1a8b5af970cec7012aaf01b05a80fb86842fa15884c07b7f74677f321d800a13a490913a1e39db5484ca594114034dab
   languageName: node
   linkType: hard
 
@@ -7808,7 +7808,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethers@npm:^5.7.2":
+"ethers@npm:^5.7.1, ethers@npm:^5.7.2":
   version: 5.8.0
   resolution: "ethers@npm:5.8.0"
   dependencies:
@@ -8091,6 +8091,13 @@ __metadata:
   dependencies:
     end-of-stream: ^1.4.1
   checksum: 5d71202a9bd688d19bfd5bcae79fbd8409c870e7566d9908fde2b9bc6d2763c2eb123cb0f8987dd29812b65d1f27867f5127838330887e636e0925b1a6235e02
+  languageName: node
+  linkType: hard
+
+"fast-text-encoding@npm:^1.0.6":
+  version: 1.0.6
+  resolution: "fast-text-encoding@npm:1.0.6"
+  checksum: 9d58f694314b3283e785bf61954902536da228607ad246905e30256f9ab8331f780ac987e7222c9f5eafd04168d07e12b8054c85cedb76a2c05af0e82387a903
   languageName: node
   linkType: hard
 
@@ -16551,12 +16558,14 @@ __metadata:
     "@release-it/conventional-changelog": ^9.0.2
     "@types/jest": ^29.5.5
     "@types/react": ^19.0.0
-    "@zkp2p/react-native-webview-intercept": ^0.3.6
+    "@zkp2p/react-native-webview-intercept": ^0.4.0
     "@zkp2p/reclaim-witness-sdk": ^4.0.0-reclaim
     del-cli: ^5.1.0
     eslint: ^9.22.0
     eslint-config-prettier: ^10.1.1
     eslint-plugin-prettier: ^5.2.3
+    ethers: ^5.7.1
+    fast-text-encoding: ^1.0.6
     jest: ^29.7.0
     jsonpath-plus: ^10.3.0
     prettier: ^3.0.3

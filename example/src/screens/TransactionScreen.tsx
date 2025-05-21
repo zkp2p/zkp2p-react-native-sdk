@@ -11,16 +11,23 @@ import type { ExtractedItemsList } from 'zkp2p-react-native-sdk';
 interface TransactionScreenProps {
   transactions: ExtractedItemsList[];
   onSelectTransaction: (transaction: ExtractedItemsList) => void;
+  onGoBack: () => void;
 }
 
 export const TransactionScreen: React.FC<TransactionScreenProps> = ({
   transactions,
   onSelectTransaction,
+  onGoBack,
 }) => {
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+      <View style={styles.headerContainer}>
+        <TouchableOpacity onPress={onGoBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>‹ Back</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Transactions</Text>
+      </View>
+      <ScrollView style={styles.scrollView}>
         {transactions.map((transaction, idx) => (
           <TouchableOpacity
             key={idx}
@@ -43,15 +50,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    paddingTop: 20,
   },
   scrollView: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 16,
+    textAlign: 'center',
+    flex: 1,
   },
   transactionItem: {
     backgroundColor: 'white',
@@ -67,5 +82,12 @@ const styles = StyleSheet.create({
   transactionText: {
     fontSize: 16,
     color: '#333',
+  },
+  backButton: {
+    padding: 10,
+  },
+  backButtonText: {
+    color: '#007AFF',
+    fontSize: 17,
   },
 });

@@ -27,6 +27,7 @@ interface Props {
   generateProof: ReturnType<typeof useZkp2p>['generateProof'];
   isGeneratingProof: boolean;
   claimData: any;
+  onGoBack: () => void;
 }
 
 /* ───────────────────────── Component ───────────────────── */
@@ -39,6 +40,7 @@ export const ProofScreen: React.FC<Props> = ({
   generateProof,
   isGeneratingProof,
   claimData,
+  onGoBack,
 }) => {
   const handleGenerate = () => {
     if (
@@ -51,11 +53,6 @@ export const ProofScreen: React.FC<Props> = ({
       console.error('Missing required data');
       return;
     }
-    console.log('provider', provider);
-    console.log('interceptedPayload', interceptedPayload);
-    console.log('intentHash', intentHash);
-    console.log('itemIndex', itemIndex);
-    console.log('generateProof', generateProof);
     generateProof(provider, interceptedPayload, intentHash, itemIndex).catch(
       console.error
     );
@@ -63,9 +60,15 @@ export const ProofScreen: React.FC<Props> = ({
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* Header with Back Button and Title */}
+      <View style={styles.headerContainer}>
+        <TouchableOpacity onPress={onGoBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>‹ Back</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Proof Generation</Text>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           {Object.entries(transaction).map(
             ([key, value]) =>
@@ -106,13 +109,20 @@ export const ProofScreen: React.FC<Props> = ({
 
 /* ───────────────────────── Styles ──────────────────────── */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  content: { padding: 20 },
+  container: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 20 },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 0,
+  },
+  content: { paddingHorizontal: 20, paddingBottom: 20 },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
+    flex: 1,
   },
 
   card: {
@@ -143,4 +153,11 @@ const styles = StyleSheet.create({
   },
   resultTitle: { fontWeight: '600', marginBottom: 8 },
   resultText: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  backButton: {
+    padding: 10,
+  },
+  backButtonText: {
+    color: '#007AFF',
+    fontSize: 17,
+  },
 });

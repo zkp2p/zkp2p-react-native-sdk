@@ -16,11 +16,13 @@ interface Props {
     action: string,
     overrides?: AuthWVOverrides
   ) => Promise<ProviderSettings>;
+  onGoBack: () => void;
 }
 
 export const AuthenticationScreen: React.FC<Props> = ({
   isAuthenticating,
   startAuthentication,
+  onGoBack,
 }) => {
   const [activePlatform, setActivePlatform] = useState<string | null>(null);
 
@@ -35,6 +37,9 @@ export const AuthenticationScreen: React.FC<Props> = ({
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity onPress={onGoBack} style={styles.backButton}>
+        <Text style={styles.backButtonText}>‹ Back</Text>
+      </TouchableOpacity>
       <Text style={styles.title}>Select Platform</Text>
 
       <TouchableOpacity
@@ -171,6 +176,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
+    marginTop: 30,
   },
   button: {
     backgroundColor: '#007AFF',
@@ -181,4 +187,14 @@ const styles = StyleSheet.create({
   },
   disabled: { backgroundColor: '#9bb8ff' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  backButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    zIndex: 10,
+  },
+  backButtonText: {
+    color: '#007AFF',
+    fontSize: 18,
+  },
 });

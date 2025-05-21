@@ -4,30 +4,32 @@ import { Zkp2pProvider, useZkp2p } from 'zkp2p-react-native-sdk';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
 import { TransactionScreen } from './screens/TransactionScreen';
 import { ProofScreen } from './screens/ProofScreen';
+import { ApiFunctionsScreen } from './screens/ApiFunctionsScreen';
+import { HomeScreen } from './screens/HomeScreen';
 import type { ExtractedItemsList } from '../../src/types';
 
 // Viem for local wallet client
 import { createWalletClient, http } from 'viem';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { base } from 'viem/chains';
+import { privateKeyToAccount } from 'viem/accounts';
+import { hardhat } from 'viem/chains';
 
 const ZKP2P_API_KEY = 'your-api-key';
 
-const privateKey = generatePrivateKey();
+const privateKey =
+  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // Hardhat 0
 const account = privateKeyToAccount(privateKey);
 const ephemeralWalletClient = createWalletClient({
   account,
-  chain: base,
+  chain: hardhat,
   transport: http(),
 });
-const ephemeralChainId = base.id;
 
 console.log(`Using ephemeral account: ${account.address}`);
 
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState<
-    'auth' | 'transactions' | 'proof'
-  >('auth');
+    'home' | 'api' | 'auth' | 'transactions' | 'proof'
+  >('home');
   const [selectedItem, setSelectedItem] = useState<ExtractedItemsList | null>(
     null
   );
@@ -57,10 +59,6 @@ function AppContent() {
   useEffect(() => {
     if (isAuthenticated) {
       setCurrentScreen('transactions');
-    } else {
-      // If not authenticated by ZKP2P, stay/go to auth screen for ZKP2P auth process
-      // This assumes Zkp2pProvider handles its own auth flow initiation via startAuthentication
-      setCurrentScreen('auth');
     }
   }, [isAuthenticated]);
 
@@ -70,13 +68,40 @@ function AppContent() {
     }
   }, [itemsList, selectedItem]);
 
+  const handleGoBack = () => {
+    if (currentScreen === 'proof') {
+      setCurrentScreen('transactions');
+      setSelectedItem(null); // Clear selected item when going back from proof
+    } else if (
+      currentScreen === 'transactions' ||
+      currentScreen === 'api' ||
+      currentScreen === 'auth'
+    ) {
+      setCurrentScreen('home');
+    }
+    // Potentially add more specific back navigation if needed, e.g., auth -> home
+  };
+
   const screen = (() => {
-    // Ensure startAuthentication is available before rendering AuthenticationScreen
+    if (currentScreen === 'home') {
+      return (
+        <HomeScreen
+          onNavigateToApi={() => setCurrentScreen('api')}
+          onNavigateToAuth={() => setCurrentScreen('auth')}
+        />
+      );
+    }
+
+    if (currentScreen === 'api') {
+      return <ApiFunctionsScreen onGoBack={handleGoBack} />;
+    }
+
     if (currentScreen === 'auth') {
       return startAuthentication ? (
         <AuthenticationScreen
           isAuthenticating={isAuthenticating}
           startAuthentication={startAuthentication}
+          onGoBack={handleGoBack}
         />
       ) : (
         <View style={styles.center}>
@@ -84,11 +109,13 @@ function AppContent() {
         </View>
       );
     }
+
     if (currentScreen === 'transactions') {
       return itemsList.length > 0 ? (
         <TransactionScreen
           transactions={itemsList}
           onSelectTransaction={setSelectedItem}
+          onGoBack={handleGoBack}
         />
       ) : (
         <View style={styles.center}>
@@ -100,6 +127,7 @@ function AppContent() {
         </View>
       );
     }
+
     if (currentScreen === 'proof') {
       return zkp2pProviderConfig && selectedItem && generateProof ? (
         <ProofScreen
@@ -111,6 +139,7 @@ function AppContent() {
           generateProof={generateProof}
           isGeneratingProof={isGeneratingProof}
           claimData={claimData}
+          onGoBack={handleGoBack}
         />
       ) : (
         <View style={styles.center}>
@@ -118,6 +147,7 @@ function AppContent() {
         </View>
       );
     }
+
     return (
       <View style={styles.center}>
         <Text>Loading or unknown state...</Text>
@@ -133,8 +163,9 @@ export default function App() {
     <Zkp2pProvider
       walletClient={ephemeralWalletClient as any}
       apiKey={ZKP2P_API_KEY}
-      chainId={ephemeralChainId}
+      chainId={31337}
       witnessUrl="https://witness-proxy.zkp2p.xyz"
+      baseApiUrl="http://localhost:8080/v1"
       zkEngine="snarkjs"
       rpcTimeout={30000}
     >
@@ -156,5 +187,16 @@ const styles = StyleSheet.create({
     color: 'red',
     fontSize: 16,
     textAlign: 'center',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
+    zIndex: 1,
+    padding: 10,
+  },
+  backButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
   },
 });

@@ -1,19 +1,19 @@
 import type { Hash, PublicClient, WalletClient } from 'viem';
 import { ESCROW_ABI } from '../utils/contracts';
-import type { FulfillIntentParams } from '../types';
+import type { ReleaseFundsToPayerParams } from '../types';
 
-export async function fulfillIntent(
+export async function releaseFundsToPayer(
   walletClient: WalletClient,
   publicClient: PublicClient,
   escrowAddress: string,
-  params: FulfillIntentParams
+  params: ReleaseFundsToPayerParams
 ): Promise<Hash> {
   try {
     const { request } = await publicClient.simulateContract({
       address: escrowAddress as `0x${string}`,
       abi: ESCROW_ABI,
-      functionName: 'fulfillIntent',
-      args: [params.paymentProof, params.intentHash],
+      functionName: 'releaseFundsToPayer',
+      args: [params.intentHash],
       account: walletClient.account,
     });
 

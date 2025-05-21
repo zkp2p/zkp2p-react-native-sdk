@@ -1,5 +1,5 @@
 {
-  "name": "zkp2p-react-native-sdk",
+  "name": "@zkp2p/zkp2p-react-native-sdk",
   "version": "0.0.1-rc.1",
   "description": "React Native SDK for ZKP2P",
   "main": "./lib/module/index.js",

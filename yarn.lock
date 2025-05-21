@@ -6406,8 +6406,8 @@ __metadata:
   linkType: hard
 
 "conventional-changelog-writer@npm:^8.0.0":
-  version: 8.0.1
-  resolution: "conventional-changelog-writer@npm:8.0.1"
+  version: 8.1.0
+  resolution: "conventional-changelog-writer@npm:8.1.0"
   dependencies:
     conventional-commits-filter: ^5.0.0
     handlebars: ^4.7.7
@@ -6415,7 +6415,7 @@ __metadata:
     semver: ^7.5.2
   bin:
     conventional-changelog-writer: dist/cli/index.js
-  checksum: 4ae21183cdab9698fcf9f4df422ca0495d5065b95cd74f85b9e34be348054e12db452aca472aaadb4ab5cab5a7a5b6d3b07de3d1d524652657642379504ffa09
+  checksum: cf3122058186f1e0ceaaa321fdad22c4ff2cbd830115747a695be153184692800e4bf51e54487884c3809c87b52f7933a968b53f44e2a25ad56993ffc2034cf1
   languageName: node
   linkType: hard
 

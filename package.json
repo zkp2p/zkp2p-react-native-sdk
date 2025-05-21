@@ -56,7 +56,8 @@
   },
   "homepage": "https://github.com/richardliang/zkp2p-react-native-sdk#readme",
   "publishConfig": {
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "devDependencies": {
     "@commitlint/cli": "17.6.7",

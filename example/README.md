@@ -11,7 +11,6 @@ This example app demonstrates the usage of the ZKP2P React Native SDK, showcasin
 
 2. **Transaction Extraction**
    - Extracting transactions from intercepted payloads
-   - Displaying transaction details
    - Transaction selection for proof generation
 
 3. **Proof Generation**

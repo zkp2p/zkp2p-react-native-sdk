@@ -5,18 +5,14 @@ React Native SDK for ZKP2P
 ## Installation
 
 ```sh
-npm install zkp2p-react-native-sdk
+yarn add @zkp2p/zkp2p-react-native-sdk
 ```
 
 ## Usage
 
 
 ```js
-import { multiply } from 'zkp2p-react-native-sdk';
-
-// ...
-
-const result = multiply(3, 7);
+import { Zkp2pProvider, useZkp2p } from 'zkp2p-react-native-sdk';
 ```
 
 

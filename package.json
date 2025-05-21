@@ -1,6 +1,6 @@
 {
   "name": "zkp2p-react-native-sdk",
-  "version": "0.1.0",
+  "version": "0.0.1-rc.1",
   "description": "React Native SDK for ZKP2P",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -59,18 +59,20 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@commitlint/config-conventional": "^19.6.0",
+    "@commitlint/cli": "17.6.7",
+    "@commitlint/config-conventional": "17.6.7",
     "@eslint/compat": "^1.2.7",
     "@eslint/eslintrc": "^3.3.0",
     "@eslint/js": "^9.22.0",
     "@evilmartians/lefthook": "^1.5.0",
+    "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/cli": "15.0.0-alpha.2",
+    "@react-native-cookies/cookies": "^6.2.1",
     "@react-native/babel-preset": "0.79.2",
     "@react-native/eslint-config": "^0.78.0",
     "@release-it/conventional-changelog": "^9.0.2",
     "@types/jest": "^29.5.5",
     "@types/react": "^19.0.0",
-    "commitlint": "^19.6.1",
     "del-cli": "^5.1.0",
     "eslint": "^9.22.0",
     "eslint-config-prettier": "^10.1.1",
@@ -80,18 +82,24 @@
     "react": "19.0.0",
     "react-native": "0.79.2",
     "react-native-builder-bob": "^0.40.10",
+    "react-native-webview": "^13.13.5",
     "release-it": "^17.10.0",
     "turbo": "^1.10.7",
-    "typescript": "^5.2.2"
+    "typescript": "^5.8.3",
+    "viem": "^2.29.1"
   },
   "peerDependencies": {
+    "@react-native-async-storage/async-storage": "*",
+    "@react-native-cookies/cookies": "*",
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-webview": "*",
+    "viem": "^2.21.55"
   },
   "workspaces": [
     "example"
   ],
-  "packageManager": "yarn@3.6.1",
+  "packageManager": "yarn@3.6.3",
   "jest": {
     "preset": "react-native",
     "modulePathIgnorePatterns": [
@@ -160,5 +168,12 @@
     "languages": "kotlin-objc",
     "type": "turbo-module",
     "version": "0.50.2"
+  },
+  "dependencies": {
+    "@zkp2p/react-native-webview-intercept": "^0.4.0",
+    "@zkp2p/reclaim-witness-sdk": "^4.0.0-reclaim",
+    "ethers": "^5.7.1",
+    "fast-text-encoding": "^1.0.6",
+    "jsonpath-plus": "^10.3.0"
   }
 }

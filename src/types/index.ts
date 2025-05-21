@@ -439,7 +439,7 @@ export type RPCResponse = {
 export type PendingEntry = {
   resolve: (r: RPCResponse) => void;
   reject: (e: Error) => void;
-  timeout: NodeJS.Timeout;
+  timeout: NodeJS.Timeout | number;
   onStep?: (step: RPCResponse) => void;
 };
 

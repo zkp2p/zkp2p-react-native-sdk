@@ -12,7 +12,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   type WindowRPCIncomingMsg,
   type RPCCreateClaimOptions,
-  type CreateClaimResponse,
 } from '@zkp2p/reclaim-witness-sdk';
 import type { WalletClient } from 'viem';
 import { DEFAULT_USER_AGENT } from '../utils/constants';
@@ -23,6 +22,7 @@ import {
   type PendingEntry,
   type NetworkEvent,
   type RPCResponse,
+  type ProofData,
 } from '../types';
 import { Zkp2pClient } from '../client';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
@@ -33,6 +33,7 @@ import type { WebViewErrorEvent } from 'react-native-webview/lib/WebViewTypes';
 import CookieManager from '@react-native-cookies/cookies';
 
 import Zkp2pContext from './Zkp2pContext';
+import { parseReclaimProxyProof } from '../utils/reclaimProof';
 
 interface Zkp2pProviderProps {
   children: ReactNode;
@@ -96,7 +97,7 @@ const Zkp2pProvider = ({
     useState<NetworkEvent | null>(null);
   const [itemsList, setItemsList] = useState<ExtractedItemsList[]>([]);
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
-  const [claimData, setClaimData] = useState<CreateClaimResponse | null>(null);
+  const [proofData, setProofData] = useState<ProofData | null>(null);
 
   /*
    * Methods
@@ -261,13 +262,27 @@ const Zkp2pProvider = ({
               }
 
               let txs: ExtractedItemsList[] = [];
+              console.log(
+                '[zkp2p] Attempting to extract items from JSON body:',
+                jsonBody
+              );
               txs = extractItemsList(jsonBody, cfg);
+              console.log(`[zkp2p] extracted ${txs.length} transactions:`, txs);
+
               if (txs.length === 0) {
+                console.warn(
+                  '[zkp2p] No transactions extracted. Setting auth error.'
+                );
                 setAuthWebViewProps(null); // Close the WebView
-                setAuthError(new Error('Unauthorized (401)'));
+                setAuthError(
+                  new Error('Unauthorized (401) - No transactions found')
+                );
                 return;
               }
 
+              console.log(
+                '[zkp2p] Successfully extracted transactions. Setting authenticated state.'
+              );
               setIsAuthenticated(true);
               setInterceptedPayload(evt);
               setItemsList(txs);
@@ -368,7 +383,7 @@ const Zkp2pProvider = ({
     onMessage: onRpcMessage,
   } as const;
 
-  const generateProof = useCallback(
+  const generateReclaimProof = useCallback(
     async (
       providerCfg: ProviderSettings,
       payload: NetworkEvent,
@@ -378,7 +393,7 @@ const Zkp2pProvider = ({
       if (!payload) throw new Error('No intercepted payload available');
 
       setIsGeneratingProof(true);
-      setClaimData(null);
+      setProofData(null);
       try {
         let body = payload.response.body ?? '{}';
         if (providerCfg.metadata.preprocessRegex) {
@@ -458,7 +473,14 @@ const Zkp2pProvider = ({
         console.log('RPC request:', rpc);
         const res = await rpcRequest('createClaim', rpc);
         console.log('RPC response:', res);
-        setClaimData(res.response?.claimData ?? null);
+
+        // only reclaim proofs are supported at the moment
+        const proof = parseReclaimProxyProof(res.response ?? null);
+        console.log('Proof:', proof);
+        setProofData({
+          proofType: 'reclaim',
+          proof: proof,
+        });
         return res;
       } finally {
         setIsGeneratingProof(false);
@@ -496,9 +518,9 @@ const Zkp2pProvider = ({
         itemsList,
         isAuthenticated,
         interceptedPayload,
-        generateProof,
+        generateReclaimProof,
         isGeneratingProof,
-        claimData,
+        proofData,
         zkp2pClient,
       }}
     >

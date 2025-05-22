@@ -1,8 +1,16 @@
 import 'fast-text-encoding';
 import { useZkp2p } from './hooks/useZkp2p';
 import { Zkp2pProvider, Zkp2pContext } from './providers';
+import { DEPLOYED_ADDRESSES } from './utils/constants';
+import { currencyInfo } from './utils/currency';
 
-export { useZkp2p, Zkp2pProvider, Zkp2pContext };
+export {
+  useZkp2p,
+  Zkp2pProvider,
+  Zkp2pContext,
+  DEPLOYED_ADDRESSES,
+  currencyInfo,
+};
 
 export type {
   ExtractedItemsList,
@@ -12,9 +20,6 @@ export type {
   FulfillIntentParams,
   SignalIntentResponse,
   AuthWVOverrides,
-  IntentStatusType,
-  Intent,
-  Deposit,
   WithdrawDepositParams,
   CancelIntentParams,
   ReleaseFundsToPayerParams,
@@ -22,17 +27,10 @@ export type {
   PostDepositDetailsRequest,
   DepositVerifierData,
   Currency,
-  GetOwnerDepositsRequest,
-  GetOwnerDepositsResponse,
-  GetDepositOrdersRequest,
-  GetDepositOrdersResponse,
-  GetDepositRequest,
-  GetDepositResponse,
-  GetOwnerIntentsRequest,
-  GetOwnerIntentsResponse,
   IntentSignalRequest,
   QuoteMaxTokenForFiatRequest,
   QuoteResponse,
   GetPayeeDetailsRequest,
   GetPayeeDetailsResponse,
+  ProofData,
 } from './types';

@@ -6,10 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { useZkp2p } from 'zkp2p-react-native-sdk';
+import { useZkp2p, DEPLOYED_ADDRESSES, currencyInfo } from '../../../src/';
 import type { Hash } from 'viem';
-import { DEPLOYED_ADDRESSES } from '../../../src/utils/constants';
-import { Currency } from '../../../src/utils/currency';
 import {
   type WithdrawDepositParams,
   type CancelIntentParams,
@@ -94,7 +92,7 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
         },
         conversionRates: [
           {
-            currency: Currency.USD,
+            currency: currencyInfo.USD?.currencyCodeHash as string,
             conversionRate: '1000000000000000000',
           },
         ],
@@ -135,7 +133,7 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
         payeeDetails:
           '0xbf074ba2ed0010ad3ca9bfe79c403f60fdc599cbb1113972a8f9448933b939ad', // Example, ensure valid
         toAddress: '0x0000000000000000000000000000000000000001',
-        currency: Currency.USD,
+        currency: currencyInfo.USD?.currencyCodeHash as string,
         onSuccess: (data) => {
           setIntentTransactionHash(data.hash);
         },

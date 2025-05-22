@@ -6,8 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import type { ProviderSettings } from 'zkp2p-react-native-sdk';
-import type { AuthWVOverrides } from 'zkp2p-react-native-sdk';
+import type { AuthWVOverrides, ProviderSettings } from '../../../src/';
 
 interface Props {
   isAuthenticating: boolean;

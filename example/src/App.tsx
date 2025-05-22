@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
-import { Zkp2pProvider, useZkp2p } from 'zkp2p-react-native-sdk';
+import { Zkp2pProvider, useZkp2p } from '../../src/';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
 import { TransactionScreen } from './screens/TransactionScreen';
 import { ProofScreen } from './screens/ProofScreen';
@@ -41,9 +41,9 @@ function AppContent() {
     interceptedPayload,
     startAuthentication,
     itemsList,
-    generateProof,
+    generateReclaimProof,
     isGeneratingProof,
-    claimData,
+    proofData,
     zkp2pClient,
   } = useZkp2p();
 
@@ -57,10 +57,10 @@ function AppContent() {
 
   // Simplified useEffect for screen changes based on ZKP2P auth
   useEffect(() => {
-    if (isAuthenticated) {
+    if (itemsList.length > 0) {
       setCurrentScreen('transactions');
     }
-  }, [isAuthenticated]);
+  }, [itemsList]);
 
   useEffect(() => {
     if (itemsList.length > 0 && selectedItem) {
@@ -129,16 +129,16 @@ function AppContent() {
     }
 
     if (currentScreen === 'proof') {
-      return zkp2pProviderConfig && selectedItem && generateProof ? (
+      return zkp2pProviderConfig && selectedItem && generateReclaimProof ? (
         <ProofScreen
           provider={zkp2pProviderConfig}
           interceptedPayload={interceptedPayload}
           intentHash="12345" // TODO: Placeholder, get from actual signalIntent call
           itemIndex={selectedItem.originalIndex}
           transaction={selectedItem}
-          generateProof={generateProof}
+          generateProof={generateReclaimProof}
           isGeneratingProof={isGeneratingProof}
-          claimData={claimData}
+          proofData={proofData}
           onGoBack={handleGoBack}
         />
       ) : (

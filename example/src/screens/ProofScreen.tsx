@@ -8,12 +8,13 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { useZkp2p } from 'zkp2p-react-native-sdk';
+import { useZkp2p } from '../../../src/';
 import type {
   ProviderSettings,
   NetworkEvent,
   ExtractedItemsList,
-} from 'zkp2p-react-native-sdk';
+  ProofData,
+} from '../../../src/';
 
 /* ───────────────────────── Props ───────────────────────── */
 interface Props {
@@ -24,10 +25,18 @@ interface Props {
   transaction: ExtractedItemsList;
 
   /* injected from <App /> */
-  generateProof: ReturnType<typeof useZkp2p>['generateProof'];
+  generateProof: ReturnType<typeof useZkp2p>['generateReclaimProof'];
   isGeneratingProof: boolean;
-  claimData: any;
+  proofData: ProofData | null;
   onGoBack: () => void;
+}
+
+// Helper function to handle BigInt serialization for JSON.stringify
+function serializeBigInt(_key: string, value: any) {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  return value;
 }
 
 /* ───────────────────────── Component ───────────────────── */
@@ -39,7 +48,7 @@ export const ProofScreen: React.FC<Props> = ({
   transaction,
   generateProof,
   isGeneratingProof,
-  claimData,
+  proofData,
   onGoBack,
 }) => {
   const handleGenerate = () => {
@@ -94,11 +103,11 @@ export const ProofScreen: React.FC<Props> = ({
           )}
         </TouchableOpacity>
 
-        {claimData && (
+        {proofData && (
           <View style={styles.result}>
-            <Text style={styles.resultTitle}>Claim Data</Text>
+            <Text style={styles.resultTitle}>Proof Data</Text>
             <Text style={styles.resultText}>
-              {JSON.stringify(claimData, null, 2)}
+              {JSON.stringify(proofData.proof, serializeBigInt, 2)}
             </Text>
           </View>
         )}

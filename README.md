@@ -23,7 +23,7 @@ const {
   interceptedPayload,
   startAuthentication,
   itemsList,
-  generateReclaimProof,
+  generateProof,
   isGeneratingProof,
   proofData,
   zkp2pClient,

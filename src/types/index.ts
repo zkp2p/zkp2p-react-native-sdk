@@ -18,6 +18,7 @@ export type {
 export type Address = `0x${string}`;
 
 export interface Zkp2pClientOptions {
+  prover: 'reclaim_gnark' | 'reclaim_snarkjs' | 'primus_proxy';
   walletClient: WalletClient;
   apiKey: string;
   chainId: number;

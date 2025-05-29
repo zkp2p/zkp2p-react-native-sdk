@@ -25,7 +25,7 @@ interface Props {
   transaction: ExtractedItemsList;
 
   /* injected from <App /> */
-  generateProof: ReturnType<typeof useZkp2p>['generateReclaimProof'];
+  generateProof: ReturnType<typeof useZkp2p>['generateProof'];
   isGeneratingProof: boolean;
   proofData: ProofData | null;
   onGoBack: () => void;

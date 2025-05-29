@@ -41,7 +41,7 @@ function AppContent() {
     interceptedPayload,
     startAuthentication,
     itemsList,
-    generateReclaimProof,
+    generateProof,
     isGeneratingProof,
     proofData,
     zkp2pClient,
@@ -129,14 +129,14 @@ function AppContent() {
     }
 
     if (currentScreen === 'proof') {
-      return zkp2pProviderConfig && selectedItem && generateReclaimProof ? (
+      return zkp2pProviderConfig && selectedItem && generateProof ? (
         <ProofScreen
           provider={zkp2pProviderConfig}
           interceptedPayload={interceptedPayload}
           intentHash="12345" // TODO: Placeholder, get from actual signalIntent call
           itemIndex={selectedItem.originalIndex}
           transaction={selectedItem}
-          generateProof={generateReclaimProof}
+          generateProof={generateProof}
           isGeneratingProof={isGeneratingProof}
           proofData={proofData}
           onGoBack={handleGoBack}
@@ -166,8 +166,8 @@ export default function App() {
       chainId={31337}
       witnessUrl="https://witness-proxy.zkp2p.xyz"
       baseApiUrl="http://localhost:8080/v1"
-      zkEngine="snarkjs"
-      rpcTimeout={30000}
+      rpcTimeout={180000}
+      prover="reclaim_snarkjs"
     >
       <AppContent />
     </Zkp2pProvider>

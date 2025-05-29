@@ -26,7 +26,7 @@ export interface Zkp2pValues {
   interceptedPayload: NetworkEvent | null;
 
   /* proof */
-  generateReclaimProof:
+  generateProof:
     | ((
         providerCfg: ProviderSettings,
         payload: NetworkEvent,
@@ -51,7 +51,7 @@ const defaultValues: Zkp2pValues = {
   itemsList: [],
   isAuthenticated: false,
   interceptedPayload: null,
-  generateReclaimProof: null,
+  generateProof: null,
   isGeneratingProof: false,
   proofData: null,
   zkp2pClient: null,

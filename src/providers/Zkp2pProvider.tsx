@@ -38,7 +38,7 @@ import { parseReclaimProxyProof } from '../utils/reclaimProof';
 interface Zkp2pProviderProps {
   children: ReactNode;
   witnessUrl?: string;
-  zkEngine?: 'snarkjs';
+  prover?: 'reclaim_gnark' | 'reclaim_snarkjs' | 'primus_proxy';
   configBaseUrl?: string;
   rpcTimeout?: number;
   walletClient: WalletClient;
@@ -52,8 +52,8 @@ export interface AuthWVOverrides
 
 const Zkp2pProvider = ({
   children,
+  prover = 'reclaim_snarkjs',
   witnessUrl = 'https://witness-proxy.zkp2p.xyz',
-  zkEngine = 'snarkjs',
   configBaseUrl = 'https://raw.githubusercontent.com/zkp2p/providers/main/',
   rpcTimeout = 30_000,
   walletClient,
@@ -67,6 +67,7 @@ const Zkp2pProvider = ({
       return null;
     }
     const clientOptions: Zkp2pClientOptions = {
+      prover,
       walletClient,
       apiKey,
       chainId,
@@ -76,7 +77,7 @@ const Zkp2pProvider = ({
       clientOptions.baseApiUrl = baseApiUrl;
     }
     return new Zkp2pClient(clientOptions);
-  }, [walletClient, apiKey, chainId, witnessUrl, baseApiUrl]);
+  }, [walletClient, apiKey, chainId, witnessUrl, baseApiUrl, prover]);
 
   const rpcWebViewRef = useRef<WebView>(null);
   const pending = useRef<Record<string, PendingEntry>>({});
@@ -383,7 +384,7 @@ const Zkp2pProvider = ({
     onMessage: onRpcMessage,
   } as const;
 
-  const generateReclaimProof = useCallback(
+  const generateProof = useCallback(
     async (
       providerCfg: ProviderSettings,
       payload: NetworkEvent,
@@ -391,6 +392,10 @@ const Zkp2pProvider = ({
       itemIndex: number = 0
     ) => {
       if (!payload) throw new Error('No intercepted payload available');
+      if (prover !== 'reclaim_snarkjs') {
+        console.warn('Unsupported prover:', prover);
+        return;
+      }
 
       setIsGeneratingProof(true);
       setProofData(null);
@@ -468,7 +473,7 @@ const Zkp2pProvider = ({
             '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
           client: { url: witnessUrl },
           zkProofConcurrency: 1,
-          zkEngine,
+          zkEngine: 'snarkjs',
         };
         console.log('RPC request:', rpc);
         const res = await rpcRequest('createClaim', rpc);
@@ -487,7 +492,7 @@ const Zkp2pProvider = ({
         setRpcKey((k) => k + 1);
       }
     },
-    [rpcRequest, zkEngine, witnessUrl]
+    [rpcRequest, witnessUrl, prover]
   );
 
   /*
@@ -518,7 +523,7 @@ const Zkp2pProvider = ({
         itemsList,
         isAuthenticated,
         interceptedPayload,
-        generateReclaimProof,
+        generateProof,
         isGeneratingProof,
         proofData,
         zkp2pClient,
@@ -544,7 +549,7 @@ const Zkp2pProvider = ({
               </View>
               <InterceptWebView
                 {...authWebViewProps}
-                // additionalCookieDomainsToInclude={['mercadolibre.com', 'www.mercadolibre.com']}
+                // additionalCookieDomainsToInclude={['mercadolibre.com', 'www.mercadolibre.com']} TODO: update provider template with mobile configs
                 style={styles.nativeWebview}
               />
             </View>

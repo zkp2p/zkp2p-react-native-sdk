@@ -3,8 +3,8 @@ import type {
   ProviderSettings,
   NetworkEvent,
   ExtractedItemsList,
+  ProofData,
 } from '../types';
-import type { CreateClaimResponse } from '@zkp2p/reclaim-witness-sdk';
 import type { Zkp2pClient } from '../client';
 
 export interface Zkp2pValues {
@@ -35,7 +35,7 @@ export interface Zkp2pValues {
       ) => Promise<any>)
     | null;
   isGeneratingProof: boolean;
-  claimData: CreateClaimResponse | null;
+  proofData: ProofData | null;
 
   /* client */
   zkp2pClient: Zkp2pClient | null;
@@ -53,7 +53,7 @@ const defaultValues: Zkp2pValues = {
   interceptedPayload: null,
   generateProof: null,
   isGeneratingProof: false,
-  claimData: null,
+  proofData: null,
   zkp2pClient: null,
 };
 

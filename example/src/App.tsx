@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
-import { Zkp2pProvider, useZkp2p } from 'zkp2p-react-native-sdk';
+import { Zkp2pProvider, useZkp2p } from '../../src/';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
 import { TransactionScreen } from './screens/TransactionScreen';
 import { ProofScreen } from './screens/ProofScreen';
@@ -43,7 +43,7 @@ function AppContent() {
     itemsList,
     generateProof,
     isGeneratingProof,
-    claimData,
+    proofData,
     zkp2pClient,
   } = useZkp2p();
 
@@ -57,10 +57,10 @@ function AppContent() {
 
   // Simplified useEffect for screen changes based on ZKP2P auth
   useEffect(() => {
-    if (isAuthenticated) {
+    if (itemsList.length > 0) {
       setCurrentScreen('transactions');
     }
-  }, [isAuthenticated]);
+  }, [itemsList]);
 
   useEffect(() => {
     if (itemsList.length > 0 && selectedItem) {
@@ -138,7 +138,7 @@ function AppContent() {
           transaction={selectedItem}
           generateProof={generateProof}
           isGeneratingProof={isGeneratingProof}
-          claimData={claimData}
+          proofData={proofData}
           onGoBack={handleGoBack}
         />
       ) : (
@@ -166,8 +166,8 @@ export default function App() {
       chainId={31337}
       witnessUrl="https://witness-proxy.zkp2p.xyz"
       baseApiUrl="http://localhost:8080/v1"
-      zkEngine="snarkjs"
-      rpcTimeout={30000}
+      rpcTimeout={180000}
+      prover="reclaim_snarkjs"
     >
       <AppContent />
     </Zkp2pProvider>

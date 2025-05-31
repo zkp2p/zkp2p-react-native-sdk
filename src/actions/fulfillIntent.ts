@@ -1,6 +1,10 @@
 import type { Hash, PublicClient, WalletClient } from 'viem';
 import { ESCROW_ABI } from '../utils/contracts';
 import type { FulfillIntentParams } from '../types';
+import {
+  encodeProofAndPaymentMethodAsBytes,
+  encodeProofAsBytes,
+} from '../utils/reclaimProof';
 
 export async function fulfillIntent(
   walletClient: WalletClient,
@@ -9,11 +13,23 @@ export async function fulfillIntent(
   params: FulfillIntentParams
 ): Promise<Hash> {
   try {
+    const proof = params.paymentProof.proof;
+
+    let proofBytes: `0x${string}`;
+    if (params.paymentMethod) {
+      proofBytes = encodeProofAndPaymentMethodAsBytes(
+        proof,
+        params.paymentMethod
+      ) as `0x${string}`;
+    } else {
+      proofBytes = encodeProofAsBytes(proof) as `0x${string}`;
+    }
+
     const { request } = await publicClient.simulateContract({
       address: escrowAddress as `0x${string}`,
       abi: ESCROW_ABI,
       functionName: 'fulfillIntent',
-      args: [params.paymentProof, params.intentHash],
+      args: [proofBytes, params.intentHash],
       account: walletClient.account,
     });
 

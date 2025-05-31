@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import type { ExtractedItemsList } from 'zkp2p-react-native-sdk';
+import type { ExtractedItemsList } from '../../../src/';
 
 interface TransactionScreenProps {
   transactions: ExtractedItemsList[];

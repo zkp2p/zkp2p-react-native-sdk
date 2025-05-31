@@ -2,6 +2,7 @@ import type { WalletClient, Hash } from 'viem';
 import type { Range } from './contract';
 import type { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
 import type { CurrencyType } from '../utils/currency';
+import type { ReclaimProof } from '../utils/reclaimProof';
 
 export interface AuthWVOverrides
   extends Partial<React.ComponentProps<typeof InterceptWebView>> {}
@@ -17,6 +18,7 @@ export type {
 export type Address = `0x${string}`;
 
 export interface Zkp2pClientOptions {
+  prover: 'reclaim_gnark' | 'reclaim_snarkjs' | 'primus_proxy';
   walletClient: WalletClient;
   apiKey: string;
   chainId: number;
@@ -35,8 +37,9 @@ export type TxCallbackParams = {
 export type ActionCallback = (params: TxCallbackParams) => void;
 
 export type FulfillIntentParams = {
-  paymentProof: Hash;
+  paymentProof: ProofData;
   intentHash: Hash;
+  paymentMethod?: number;
   onSuccess?: ActionCallback;
   onError?: (error: Error) => void;
   onMined?: ActionCallback;
@@ -227,134 +230,6 @@ export type GetPayeeDetailsResponse = {
   statusCode: number;
 };
 
-export const DepositStatus = {
-  ACTIVE: 'ACTIVE',
-  WITHDRAWN: 'WITHDRAWN',
-  CLOSED: 'CLOSED',
-} as const;
-
-export type DepositStatusType =
-  (typeof DepositStatus)[keyof typeof DepositStatus];
-
-export type Deposit = {
-  id: string;
-  owner: string;
-  token: string;
-  amount: string;
-  status: DepositStatusType;
-  createdAt?: Date;
-  updatedAt?: Date;
-  verifiers: Array<{
-    id: string;
-    verifier: string;
-    createdAt?: Date;
-    updatedAt?: Date;
-    currencies: Array<{
-      id: string;
-      code: string;
-      conversionRate: string;
-      createdAt?: Date;
-      updatedAt?: Date;
-    }>;
-  }>;
-};
-
-export type GetOwnerDepositsRequest = {
-  ownerAddress: string;
-};
-
-export type GetOwnerDepositsResponse = {
-  success: boolean;
-  message: string;
-  responseObject: Deposit[];
-  statusCode: number;
-};
-
-export const IntentStatus = {
-  SIGNALED: 'SIGNALED',
-  FULFILLED: 'FULFILLED',
-  PRUNED: 'PRUNED',
-} as const;
-
-export type IntentStatusType = (typeof IntentStatus)[keyof typeof IntentStatus];
-
-export type Intent = {
-  id: number;
-  intentHash: string;
-  status: IntentStatusType;
-  depositId: string;
-  verifier: string;
-  owner: string;
-  toAddress: string;
-  amount: string;
-  fiatCurrency: string;
-  conversionRate: string;
-  sustainabilityFee: string | null;
-  verifierFee: string | null;
-  signalTxHash: string;
-  signalTimestamp: Date;
-  fulfillTxHash: string | null;
-  fulfillTimestamp: Date | null;
-  pruneTxHash: string | null;
-  prunedTimestamp: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type GetDepositOrdersRequest = {
-  depositId: string;
-};
-
-export type GetDepositOrdersResponse = {
-  success: boolean;
-  message: string;
-  responseObject: Intent[];
-  statusCode: number;
-};
-
-export type GetDepositRequest = {
-  depositId: string;
-};
-
-export type GetDepositResponse = {
-  success: boolean;
-  message: string;
-  responseObject: {
-    id: string;
-    owner: string;
-    token: string;
-    amount: string;
-    status: string;
-    createdAt: string;
-    updatedAt: string;
-    verifiers: Array<{
-      id: string;
-      verifier: string;
-      createdAt: string;
-      updatedAt: string;
-      currencies: Array<{
-        id: string;
-        code: string;
-        conversionRate: string;
-        createdAt: string;
-        updatedAt: string;
-      }>;
-    }>;
-  };
-  statusCode: number;
-};
-
-export type GetOwnerIntentsRequest = {
-  ownerAddress: string;
-};
-
-export type GetOwnerIntentsResponse = {
-  success: boolean;
-  message: string;
-  responseObject: Intent[];
-  statusCode: number;
-};
-
 export type ExtractedItemsList = {
   [k: string]: any; // dynamic columns
   hidden: boolean;
@@ -407,6 +282,10 @@ export interface ProviderSettings {
   secretHeaders: string[];
   responseMatches: ResponseMatch[];
   responseRedactions: ResponseRedaction[];
+  mobile?: {
+    includeAdditionalCookieDomains: string[];
+    actionLink: string;
+  };
 }
 
 export interface NetworkEvent {
@@ -441,6 +320,11 @@ export type PendingEntry = {
   reject: (e: Error) => void;
   timeout: NodeJS.Timeout | number;
   onStep?: (step: RPCResponse) => void;
+};
+
+export type ProofData = {
+  proofType: 'reclaim';
+  proof: ReclaimProof;
 };
 
 // Export on-chain view types

@@ -282,6 +282,10 @@ export interface ProviderSettings {
   secretHeaders: string[];
   responseMatches: ResponseMatch[];
   responseRedactions: ResponseRedaction[];
+  mobile?: {
+    includeAdditionalCookieDomains: string[];
+    actionLink: string;
+  };
 }
 
 export interface NetworkEvent {

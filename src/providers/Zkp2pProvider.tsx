@@ -192,6 +192,8 @@ const Zkp2pProvider = ({
             html: true,
             maxBodyBytes: 10 * 1024 * 1024,
           },
+          additionalCookieDomainsToInclude:
+            cfg.mobile?.includeAdditionalCookieDomains ?? [],
           style: { flex: 1 },
           onIntercept: async (evt: NetworkEvent) => {
             console.log('onIntercept', evt);
@@ -549,7 +551,6 @@ const Zkp2pProvider = ({
               </View>
               <InterceptWebView
                 {...authWebViewProps}
-                // additionalCookieDomainsToInclude={['mercadolibre.com', 'www.mercadolibre.com']} TODO: update provider template with mobile configs
                 style={styles.nativeWebview}
               />
             </View>

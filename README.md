@@ -18,13 +18,12 @@ import { Zkp2pProvider, useZkp2p } from 'zkp2p-react-native-sdk';
 
 const {
   provider: zkp2pProviderConfig,
-  isAuthenticating,
-  isAuthenticated,
+  flowState,
   interceptedPayload,
+  startAction,
   startAuthentication,
   itemsList,
   generateProof,
-  isGeneratingProof,
   proofData,
   zkp2pClient,
 } = useZkp2p();

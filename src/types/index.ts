@@ -327,6 +327,16 @@ export type ProofData = {
   proof: ReclaimProof;
 };
 
+export type FlowState =
+  | 'idle'
+  | 'actionStarted'
+  | 'actionStartedExternal'
+  | 'authenticating'
+  | 'authenticated'
+  | 'proofGenerating'
+  | 'proofGeneratedSuccess'
+  | 'proofGeneratedFailure';
+
 // Export on-chain view types
 export type {
   EscrowRange,

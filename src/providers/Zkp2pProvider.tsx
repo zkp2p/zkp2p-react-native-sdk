@@ -6,7 +6,14 @@ import React, {
   useMemo,
 } from 'react';
 import type { ReactNode } from 'react';
-import { Modal, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import {
+  Modal,
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Linking,
+} from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -23,6 +30,7 @@ import {
   type NetworkEvent,
   type RPCResponse,
   type ProofData,
+  type FlowState,
 } from '../types';
 import { Zkp2pClient } from '../client';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
@@ -86,18 +94,16 @@ const Zkp2pProvider = ({
    * State
    */
   const [provider, setProvider] = useState<ProviderSettings | null>(null);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [flowState, setFlowState] = useState<FlowState>('idle');
   const [authError, setAuthError] = useState<Error | null>(null);
   const [authWebViewProps, setAuthWebViewProps] = useState<React.ComponentProps<
     typeof InterceptWebView
   > | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [rpcKey, setRpcKey] = useState(0);
 
   const [interceptedPayload, setInterceptedPayload] =
     useState<NetworkEvent | null>(null);
   const [itemsList, setItemsList] = useState<ExtractedItemsList[]>([]);
-  const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofData, setProofData] = useState<ProofData | null>(null);
 
   /*
@@ -154,23 +160,74 @@ const Zkp2pProvider = ({
 
       setInterceptedPayload(payload);
       setItemsList(extractItemsList(body, cfg));
-      setIsAuthenticated(true);
+      setFlowState('authenticated');
       return true;
     },
-    [setInterceptedPayload, setItemsList, setIsAuthenticated]
+    [setInterceptedPayload, setItemsList]
+  );
+
+  const startAction = useCallback(
+    async (
+      platform: string,
+      actionType: string,
+      onCompleted: () => Promise<void> | void = () => {},
+      overrides: AuthWVOverrides = {}
+    ) => {
+      let cfg = provider;
+      if (
+        !cfg ||
+        cfg.metadata.platform !== platform ||
+        cfg.actionType !== actionType
+      ) {
+        cfg = await fetchProviderConfig(platform, actionType);
+        setProvider(cfg);
+      }
+      console.log('Setting provider:', cfg);
+
+      const actionUrl = cfg.mobile?.actionLink;
+      if (actionUrl?.startsWith('http')) {
+        setFlowState('actionStarted');
+        setAuthWebViewProps({
+          source: { uri: actionUrl },
+          urlPatterns: [],
+          userAgent: DEFAULT_USER_AGENT,
+          interceptConfig: { xhr: false, fetch: false, html: false },
+          additionalCookieDomainsToInclude:
+            cfg.mobile?.includeAdditionalCookieDomains ?? [],
+          style: { flex: 1 },
+          ...overrides,
+        });
+      } else if (actionUrl) {
+        setFlowState('actionStartedExternal');
+        Linking.openURL(actionUrl);
+      }
+
+      await onCompleted();
+
+      return startAuthentication(platform, actionType, overrides, cfg);
+    },
+    [fetchProviderConfig, startAuthentication, provider]
   );
 
   const startAuthentication = useCallback(
     async (
       platform: string,
       actionType: string,
-      overrides: AuthWVOverrides = {}
+      overrides: AuthWVOverrides = {},
+      existing?: ProviderSettings
     ) => {
-      setIsAuthenticating(true);
+      setFlowState('authenticating');
       try {
-        const cfg = await fetchProviderConfig(platform, actionType);
+        let cfg = existing ?? provider;
+        if (
+          !cfg ||
+          cfg.metadata.platform !== platform ||
+          cfg.actionType !== actionType
+        ) {
+          cfg = await fetchProviderConfig(platform, actionType);
+          setProvider(cfg);
+        }
         console.log('Setting provider:', cfg);
-        setProvider(cfg);
 
         try {
           const reused = await restoreSessionWith(cfg);
@@ -286,7 +343,7 @@ const Zkp2pProvider = ({
               console.log(
                 '[zkp2p] Successfully extracted transactions. Setting authenticated state.'
               );
-              setIsAuthenticated(true);
+              setFlowState('authenticated');
               setInterceptedPayload(evt);
               setItemsList(txs);
               setAuthWebViewProps(null); // close the modal
@@ -306,10 +363,10 @@ const Zkp2pProvider = ({
 
         return cfg;
       } finally {
-        setIsAuthenticating(false);
+        setFlowState((s) => (s === 'authenticating' ? 'idle' : s));
       }
     },
-    [fetchProviderConfig, restoreSessionWith]
+    [fetchProviderConfig, restoreSessionWith, provider]
   );
 
   const closeAuthWebView = () => setAuthWebViewProps(null);
@@ -399,7 +456,7 @@ const Zkp2pProvider = ({
         return;
       }
 
-      setIsGeneratingProof(true);
+      setFlowState('proofGenerating');
       setProofData(null);
       try {
         let body = payload.response.body ?? '{}';
@@ -488,9 +545,12 @@ const Zkp2pProvider = ({
           proofType: 'reclaim',
           proof: proof,
         });
+        setFlowState('proofGeneratedSuccess');
         return res;
+      } catch (err) {
+        setFlowState('proofGeneratedFailure');
+        throw err;
       } finally {
-        setIsGeneratingProof(false);
         setRpcKey((k) => k + 1);
       }
     },
@@ -517,16 +577,15 @@ const Zkp2pProvider = ({
     <Zkp2pContext.Provider
       value={{
         provider,
-        isAuthenticating,
+        flowState,
         authError,
+        startAction,
         startAuthentication,
         authWebViewProps,
         closeAuthWebView,
         itemsList,
-        isAuthenticated,
         interceptedPayload,
         generateProof,
-        isGeneratingProof,
         proofData,
         zkp2pClient,
       }}

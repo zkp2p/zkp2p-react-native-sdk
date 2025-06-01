@@ -4,16 +4,29 @@ import type {
   NetworkEvent,
   ExtractedItemsList,
   ProofData,
+  FlowState,
 } from '../types';
 import type { Zkp2pClient } from '../client';
 
 export interface Zkp2pValues {
   /* auth */
   provider: ProviderSettings | null;
-  isAuthenticating: boolean;
+  flowState: FlowState;
   authError: Error | null;
+  startAction:
+    | ((
+        platform: string,
+        actionType: string,
+        onCompleted: () => Promise<void> | void,
+        overrides?: any
+      ) => Promise<ProviderSettings>)
+    | null;
   startAuthentication:
-    | ((platform: string, actionType: string) => Promise<ProviderSettings>)
+    | ((
+        platform: string,
+        actionType: string,
+        overrides?: any
+      ) => Promise<ProviderSettings>)
     | null;
   authWebViewProps: any;
   closeAuthWebView: (() => void) | null;
@@ -22,7 +35,6 @@ export interface Zkp2pValues {
   itemsList: ExtractedItemsList[];
 
   /* auth state */
-  isAuthenticated: boolean;
   interceptedPayload: NetworkEvent | null;
 
   /* proof */
@@ -34,7 +46,6 @@ export interface Zkp2pValues {
         itemIndex?: number
       ) => Promise<any>)
     | null;
-  isGeneratingProof: boolean;
   proofData: ProofData | null;
 
   /* client */
@@ -43,16 +54,15 @@ export interface Zkp2pValues {
 
 const defaultValues: Zkp2pValues = {
   provider: null,
-  isAuthenticating: false,
+  flowState: 'idle',
   authError: null,
+  startAction: null,
   startAuthentication: null,
   authWebViewProps: null,
   closeAuthWebView: null,
   itemsList: [],
-  isAuthenticated: false,
   interceptedPayload: null,
   generateProof: null,
-  isGeneratingProof: false,
   proofData: null,
   zkp2pClient: null,
 };

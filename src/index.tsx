@@ -33,4 +33,5 @@ export type {
   GetPayeeDetailsRequest,
   GetPayeeDetailsResponse,
   ProofData,
+  FlowState,
 } from './types';

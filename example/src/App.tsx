@@ -36,16 +36,21 @@ function AppContent() {
 
   const {
     provider: zkp2pProviderConfig,
-    isAuthenticating,
-    isAuthenticated,
+    flowState,
     interceptedPayload,
     startAuthentication,
     itemsList,
     generateProof,
-    isGeneratingProof,
     proofData,
     zkp2pClient,
   } = useZkp2p();
+
+  const isAuthenticating =
+    flowState === 'authenticating' ||
+    flowState === 'actionStarted' ||
+    flowState === 'actionStartedExternal';
+  const isAuthenticated = flowState === 'authenticated';
+  const isGeneratingProof = flowState === 'proofGenerating';
 
   useEffect(() => {
     if (zkp2pClient) {

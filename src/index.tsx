@@ -34,5 +34,5 @@ export type {
   GetPayeeDetailsResponse,
   ProofData,
   FlowState,
-  StartAuthenticationOptions,
+  InitiateOptions,
 } from './types';

@@ -10,19 +10,16 @@ export interface AuthWVOverrides
 // Define options interfaces to match Zkp2pContext.ts
 export interface InitialActionOptions {
   urlOverride?: string;
-  isHttpInWebView?: boolean;
   urlVariables?: Record<string, string>;
   buttonOptions?: {
     text?: string;
     position?: 'top' | 'bottom' | 'center' | 'bottom_center';
-    style?: any; // CSS-in-JS style object
+    style?: Record<string, string>;
     hide?: boolean;
   };
-  onActionLaunched?: () => Promise<void> | void;
-  proceedToAuthAfterExternalAction?: boolean; // Default false for external, can be true
 }
 
-export interface StartAuthenticationOptions {
+export interface InitiateOptions {
   authOverrides?: AuthWVOverrides;
   existingProviderConfig?: ProviderSettings;
   initialAction?: InitialActionOptions;
@@ -350,10 +347,9 @@ export type ProofData = {
 
 export type FlowState =
   | 'idle'
-  | 'actionStarted'
-  | 'actionStartedExternal'
   | 'authenticating'
   | 'authenticated'
+  | 'actionStarted'
   | 'proofGenerating'
   | 'proofGeneratedSuccess'
   | 'proofGeneratedFailure';

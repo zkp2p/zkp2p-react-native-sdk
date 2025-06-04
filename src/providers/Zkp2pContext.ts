@@ -6,7 +6,7 @@ import type {
   NetworkEvent,
   ProofData,
   FlowState,
-  StartAuthenticationOptions,
+  InitiateOptions,
 } from '../types';
 import type { Zkp2pClient } from '../client';
 
@@ -17,11 +17,12 @@ export interface Zkp2pValues {
   authError: Error | null;
   metadataList: ExtractedMetadataList[];
   interceptedPayload: NetworkEvent | null;
-  startAuthentication?: (
+  initiate?: (
     platform: string,
     actionType: string,
-    options?: StartAuthenticationOptions
+    options?: InitiateOptions
   ) => Promise<ProviderSettings>;
+  authenticate?: () => Promise<void>;
   authWebViewProps: React.ComponentProps<typeof InterceptWebView> | null;
   closeAuthWebView?: () => void;
 

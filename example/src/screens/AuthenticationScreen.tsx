@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import type {
   ProviderSettings,
-  StartAuthenticationOptions as SDKStartAuthenticationOptions,
+  InitiateOptions as SDKInitiateOptions,
 } from '../../../src/';
 
 interface Props {
@@ -16,7 +16,7 @@ interface Props {
   startAuthentication: (
     platform: string,
     actionType: string,
-    options?: SDKStartAuthenticationOptions
+    options?: SDKInitiateOptions
   ) => Promise<ProviderSettings>;
   onGoBack: () => void;
 }
@@ -28,14 +28,9 @@ export const AuthenticationScreen: React.FC<Props> = ({
 }) => {
   const [activePlatform, setActivePlatform] = useState<string | null>(null);
 
-  const onCompletedStartAction = async () => {
-    console.log('onActionLaunched (previously onCompletedStartAction)');
-  };
-
   const handleSelect = async (platform: string, action: string) => {
     setActivePlatform(platform);
     try {
-      const urlVariables: Record<string, string> = {};
       const currentButtonOptions = {
         text: 'I have completed payment',
         position: 'bottom_center' as const,
@@ -58,11 +53,9 @@ export const AuthenticationScreen: React.FC<Props> = ({
         };
       }
 
-      const authOptions: SDKStartAuthenticationOptions = {
+      const authOptions: SDKInitiateOptions = {
         initialAction: {
-          urlVariables: urlVariables,
           buttonOptions: currentButtonOptions,
-          onActionLaunched: onCompletedStartAction,
         },
         authOverrides: {},
       };

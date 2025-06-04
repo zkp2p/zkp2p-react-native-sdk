@@ -33,7 +33,7 @@ function AppContent() {
     provider: zkp2pProviderConfig,
     flowState,
     metadataList,
-    startAuthentication,
+    initiate,
     generateProof,
     proofData,
     zkp2pClient,
@@ -42,9 +42,7 @@ function AppContent() {
   } = useZkp2p();
 
   const isAuthenticating =
-    flowState === 'authenticating' ||
-    flowState === 'actionStarted' ||
-    flowState === 'actionStartedExternal';
+    flowState === 'authenticating' || flowState === 'actionStarted';
   const isAuthenticated = flowState === 'authenticated';
 
   useEffect(() => {
@@ -96,10 +94,10 @@ function AppContent() {
     }
 
     if (currentScreen === 'auth') {
-      return startAuthentication ? (
+      return initiate ? (
         <AuthenticationScreen
           isAuthenticating={isAuthenticating}
-          startAuthentication={startAuthentication}
+          startAuthentication={initiate}
           onGoBack={handleGoBack}
         />
       ) : (

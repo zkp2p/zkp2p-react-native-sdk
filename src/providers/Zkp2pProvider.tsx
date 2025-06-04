@@ -31,7 +31,7 @@ import {
   type RPCResponse,
   type ProofData,
   type FlowState,
-  type StartAuthenticationOptions,
+  type InitiateOptions,
 } from '../types';
 import { Zkp2pClient } from '../client';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
@@ -333,205 +333,230 @@ const Zkp2pProvider = ({
     [_handleAuthIntercept, setAuthError, setAuthWebViewProps]
   );
 
-  const startAuthentication = useCallback(
-    async (
-      platform: string,
-      actionType: string,
-      options: StartAuthenticationOptions = {}
-    ): Promise<ProviderSettings> => {
-      const { existingProviderConfig, initialAction } = options;
-      setAuthError(null);
-      setMetadataList([]);
-      setInterceptedPayload(null);
-
-      let cfg =
-        existingProviderConfig ??
-        (await _getOrFetchProviderConfig(platform, actionType, provider));
-
-      if (initialAction) {
-        let effectiveActionUrl =
-          initialAction.urlOverride ?? cfg.mobile?.actionLink;
-
-        if (effectiveActionUrl && initialAction.urlVariables) {
-          Object.entries(initialAction.urlVariables).forEach(([key, value]) => {
-            effectiveActionUrl = effectiveActionUrl!.replace(
-              new RegExp(`{{${key}}}`, 'g'),
-              value
-            );
-          });
-          console.log(
-            '[zkp2p] Effective Action URL with urlVariables:',
-            effectiveActionUrl
-          );
-        }
-
-        const isHttpUrl = effectiveActionUrl?.startsWith('http');
-        const openInWebView =
-          initialAction.isHttpInWebView !== undefined
-            ? initialAction.isHttpInWebView
-            : isHttpUrl;
-
-        if (effectiveActionUrl && openInWebView) {
-          setFlowState('actionStarted');
-          if (initialAction.onActionLaunched) {
-            try {
-              await initialAction.onActionLaunched();
-            } catch (e) {
-              console.error('Error in onActionLaunched:', e);
-            }
-          }
-
-          setAuthWebViewProps({
-            source: { uri: effectiveActionUrl },
-            urlPatterns: [],
-            userAgent: DEFAULT_USER_AGENT,
-            interceptConfig: { xhr: false, fetch: false, html: false },
-            additionalCookieDomainsToInclude:
-              cfg.mobile?.includeAdditionalCookieDomains ?? [],
-            style: { flex: 1 },
-            onIntercept: (evt: NetworkEvent) => {
-              console.log(
-                '[zkp2p] Intercept during action phase (should be off):',
-                evt.request.method,
-                evt.response.url
-              );
-            },
-            injectedJavaScript: ` 
-              (function() { 
-                const buttonOpts = ${JSON.stringify(initialAction.buttonOptions || {})};
-                if (buttonOpts.hide) return;
-                const button = document.createElement('button');
-                button.innerHTML = buttonOpts.text || 'Continue to Authentication';
-                const defaultStyle = {
-                  position: 'fixed', zIndex: '9999', padding: '12px 24px',
-                  backgroundColor: '#007AFF', color: 'white', border: 'none',
-                  borderRadius: '8px', fontSize: '16px', fontWeight: '600',
-                  cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)',
-                  transition: 'all 0.2s ease', width: 'auto', margin: '0'
-                };
-                const position = buttonOpts.position || 'bottom';
-                if (position === 'bottom') { defaultStyle.right = '20px'; defaultStyle.bottom = '20px'; }
-                else if (position === 'top') { defaultStyle.top = '20px'; defaultStyle.right = '20px'; }
-                else if (position === 'center') { defaultStyle.top = '50%'; defaultStyle.left = '50%'; defaultStyle.transform = 'translate(-50%, -50%)'; }
-                else if (position === 'bottom_center') { defaultStyle.bottom = '20px'; defaultStyle.left = '50%'; defaultStyle.transform = 'translateX(-50%)'; defaultStyle.width = 'calc(100% - 40px)'; defaultStyle.maxWidth = '300px'; }
-                Object.assign(defaultStyle, buttonOpts.style || {});
-                Object.entries(defaultStyle).forEach(([k, val]) => { button.style[k] = String(val); });
-                button.addEventListener('mouseenter', function() { this.style.opacity = '0.9'; });
-                button.addEventListener('mouseleave', function() { this.style.opacity = '1'; });
-                button.onclick = function() {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION' }));
-                };
-                document.body.appendChild(button);
-              })();
-            `,
-            onMessage: async (event) => {
-              try {
-                const data = JSON.parse(event.nativeEvent.data);
-                if (data.type === 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION') {
-                  console.log(
-                    '[zkp2p] Proceeding to auth after initial HTTP action...'
-                  );
-                  setFlowState('authenticating');
-                  try {
-                    const reused = await restoreSessionWith(cfg);
-                    if (reused) {
-                      setAuthWebViewProps(null);
-                      return;
-                    }
-                  } catch (err) {
-                    console.warn(
-                      '[zkp2p] Stored session invalid after initial action button:',
-                      err
-                    );
-                  }
-                  const webViewPropsForAuth = _setupAuthWebViewProps(cfg);
-                  setAuthWebViewProps(webViewPropsForAuth);
-                }
-              } catch (err) {
-                console.error(
-                  '[zkp2p] Failed to parse WebView message from initial action:',
-                  err
-                );
-              }
-            },
-            onError: (e: WebViewErrorEvent) => {
-              console.error(
-                '[zkp2p] InitialAction WebView error:',
-                e.nativeEvent?.description ?? e.type
-              );
-              setAuthError(
-                new Error(String(e.nativeEvent?.description ?? e.type))
-              );
-              setAuthWebViewProps(null);
-              setFlowState('idle');
-            },
-          });
-          return cfg;
-        } else if (effectiveActionUrl) {
-          setFlowState('actionStartedExternal');
-          if (initialAction.onActionLaunched) {
-            try {
-              await initialAction.onActionLaunched();
-            } catch (e) {
-              console.error('Error in onActionLaunched:', e);
-            }
-          }
-          try {
-            await Linking.openURL(effectiveActionUrl);
-          } catch (linkErr) {
-            console.error('[zkp2p] Failed to open external URL:', linkErr);
-            setAuthError(
-              new Error(`Failed to open action URL: ${effectiveActionUrl}`)
-            );
-            setFlowState('idle');
-            return cfg;
-          }
-
-          if (initialAction.proceedToAuthAfterExternalAction !== true) {
-            console.log(
-              '[zkp2p] External action launched. Authentication will not proceed automatically.'
-            );
-            return cfg;
-          }
-          console.log(
-            '[zkp2p] External action launched. Proceeding to authentication...'
-          );
-        } else {
-          if (initialAction.onActionLaunched) {
-            try {
-              await initialAction.onActionLaunched();
-            } catch (e) {
-              console.error('Error in onActionLaunched:', e);
-            }
-          }
-        }
-      }
-
+  // Helper function to proceed to authentication flow
+  const _authenticateInternal = useCallback(
+    async (cfg: ProviderSettings) => {
       setFlowState('authenticating');
+
       try {
         const reused = await restoreSessionWith(cfg);
         if (reused) {
           setAuthWebViewProps(null);
-          return cfg;
+          return;
         }
       } catch (err) {
-        console.warn('[zkp2p] Stored session invalid (main auth path):', err);
+        console.warn('[zkp2p] Stored session invalid:', err);
         setAuthError(err as Error);
       }
 
       console.log('[zkp2p] No session reused, setting up auth WebView.');
       const webViewProps = _setupAuthWebViewProps(cfg);
       setAuthWebViewProps(webViewProps);
+    },
+    [
+      restoreSessionWith,
+      setFlowState,
+      setAuthError,
+      setAuthWebViewProps,
+      _setupAuthWebViewProps,
+    ]
+  );
 
+  // Helper function to handle HTTP actions in WebView
+  const _handleHttpActionInWebView = useCallback(
+    async (
+      effectiveActionUrl: string,
+      cfg: ProviderSettings,
+      initialAction: NonNullable<InitiateOptions['initialAction']>
+    ) => {
+      setFlowState('actionStarted');
+
+      setAuthWebViewProps({
+        source: { uri: effectiveActionUrl },
+        urlPatterns: [],
+        userAgent: DEFAULT_USER_AGENT,
+        interceptConfig: { xhr: false, fetch: false, html: false },
+        additionalCookieDomainsToInclude:
+          cfg.mobile?.includeAdditionalCookieDomains ?? [],
+        style: { flex: 1 },
+        onIntercept: (evt: NetworkEvent) => {
+          console.log(
+            '[zkp2p] Intercept during action phase (should be off):',
+            evt.request.method,
+            evt.response.url
+          );
+        },
+        injectedJavaScript: ` 
+          (function() { 
+            const buttonOpts = ${JSON.stringify(initialAction.buttonOptions || {})};
+            if (buttonOpts.hide) return;
+            const button = document.createElement('button');
+            button.innerHTML = buttonOpts.text || 'Continue to Authentication';
+            const defaultStyle = {
+              position: 'fixed', zIndex: '9999', padding: '12px 24px',
+              backgroundColor: '#007AFF', color: 'white', border: 'none',
+              borderRadius: '8px', fontSize: '16px', fontWeight: '600',
+              cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)',
+              transition: 'all 0.2s ease', width: 'auto', margin: '0'
+            };
+            const position = buttonOpts.position || 'bottom';
+            if (position === 'bottom') { defaultStyle.right = '20px'; defaultStyle.bottom = '20px'; }
+            else if (position === 'top') { defaultStyle.top = '20px'; defaultStyle.right = '20px'; }
+            else if (position === 'center') { defaultStyle.top = '50%'; defaultStyle.left = '50%'; defaultStyle.transform = 'translate(-50%, -50%)'; }
+            else if (position === 'bottom_center') { defaultStyle.bottom = '20px'; defaultStyle.left = '50%'; defaultStyle.transform = 'translateX(-50%)'; defaultStyle.width = 'calc(100% - 40px)'; defaultStyle.maxWidth = '300px'; }
+            Object.assign(defaultStyle, buttonOpts.style || {});
+            Object.entries(defaultStyle).forEach(([k, val]) => { button.style[k] = String(val); });
+            button.addEventListener('mouseenter', function() { this.style.opacity = '0.9'; });
+            button.addEventListener('mouseleave', function() { this.style.opacity = '1'; });
+            button.onclick = function() {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION' }));
+            };
+            document.body.appendChild(button);
+          })();
+        `,
+        onMessage: async (event) => {
+          try {
+            const data = JSON.parse(event.nativeEvent.data);
+            if (data.type === 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION') {
+              console.log(
+                '[zkp2p] Proceeding to auth after initial HTTP action...'
+              );
+              await _authenticateInternal(cfg);
+            }
+          } catch (err) {
+            console.error(
+              '[zkp2p] Failed to parse WebView message from initial action:',
+              err
+            );
+          }
+        },
+        onError: (e: WebViewErrorEvent) => {
+          console.error(
+            '[zkp2p] InitialAction WebView error:',
+            e.nativeEvent?.description ?? e.type
+          );
+          setAuthError(new Error(String(e.nativeEvent?.description ?? e.type)));
+          setAuthWebViewProps(null);
+          setFlowState('idle');
+        },
+      });
+    },
+    [setFlowState, setAuthWebViewProps, setAuthError, _authenticateInternal]
+  );
+
+  // Helper function to handle external actions
+  const _handleExternalAction = useCallback(
+    async (
+      actionUrl: string,
+      initialAction: NonNullable<InitiateOptions['initialAction']>
+    ) => {
+      setFlowState('actionStarted');
+
+      // Apply URL variable substitutions if provided
+      let effectiveActionUrl = actionUrl;
+      if (initialAction.urlVariables) {
+        Object.entries(initialAction.urlVariables).forEach(([key, value]) => {
+          effectiveActionUrl = effectiveActionUrl.replace(
+            new RegExp(`{{${key}}}`, 'g'),
+            value
+          );
+        });
+        console.log(
+          '[zkp2p] Effective Action URL with urlVariables:',
+          effectiveActionUrl
+        );
+      }
+
+      try {
+        await Linking.openURL(effectiveActionUrl);
+        console.log('[zkp2p] External action launched successfully.');
+      } catch (linkErr) {
+        console.error('[zkp2p] Failed to open external URL:', linkErr);
+        setAuthError(
+          new Error(`Failed to open action URL: ${effectiveActionUrl}`)
+        );
+        setFlowState('idle');
+        throw linkErr;
+      }
+    },
+    [setFlowState, setAuthError]
+  );
+
+  // Public method to manually proceed to authentication after external action
+  const authenticate = useCallback(async () => {
+    if (!provider) {
+      throw new Error(
+        'No provider configuration available. Call initiate first.'
+      );
+    }
+
+    if (flowState !== 'actionStarted') {
+      throw new Error('Must be in actionStarted state');
+    }
+
+    await _authenticateInternal(provider);
+  }, [provider, flowState, _authenticateInternal]);
+
+  // Helper function to handle initial action flow
+  const _handleInitialAction = useCallback(
+    async (
+      cfg: ProviderSettings,
+      initialAction: NonNullable<InitiateOptions['initialAction']>
+    ) => {
+      const effectiveActionUrl = cfg.mobile?.actionLink;
+
+      if (!effectiveActionUrl) return;
+
+      const isHttpUrl = effectiveActionUrl.startsWith('http');
+
+      if (isHttpUrl) {
+        // HTTP URL - open in WebView with continue button
+        await _handleHttpActionInWebView(
+          effectiveActionUrl,
+          cfg,
+          initialAction
+        );
+      } else {
+        // Non-HTTP URL - open externally and wait for manual proceed or auto-proceed
+        await _handleExternalAction(effectiveActionUrl, initialAction);
+      }
+    },
+    [_handleHttpActionInWebView, _handleExternalAction]
+  );
+
+  const initiate = useCallback(
+    async (
+      platform: string,
+      actionType: string,
+      options: InitiateOptions = {}
+    ): Promise<ProviderSettings> => {
+      const { existingProviderConfig, initialAction } = options;
+
+      // Reset state
+      setAuthError(null);
+      setMetadataList([]);
+      setInterceptedPayload(null);
+
+      // Get provider configuration
+      const cfg =
+        existingProviderConfig ??
+        (await _getOrFetchProviderConfig(platform, actionType, provider));
+
+      // Handle initial action if provided
+      if (initialAction) {
+        await _handleInitialAction(cfg, initialAction);
+        return cfg;
+      }
+
+      // No initial action - proceed directly to authentication
+      await _authenticateInternal(cfg);
       return cfg;
     },
     [
       _getOrFetchProviderConfig,
       provider,
-      restoreSessionWith,
-      _setupAuthWebViewProps,
-      setAuthWebViewProps,
-      setFlowState,
+      _handleInitialAction,
+      _authenticateInternal,
       setAuthError,
       setMetadataList,
       setInterceptedPayload,
@@ -747,7 +772,8 @@ const Zkp2pProvider = ({
         authError,
         metadataList,
         interceptedPayload,
-        startAuthentication,
+        initiate,
+        authenticate,
         authWebViewProps,
         closeAuthWebView,
         generateProof,

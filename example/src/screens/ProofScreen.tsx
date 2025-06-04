@@ -1,35 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  FlatList,
   ActivityIndicator,
   ScrollView,
   Platform,
 } from 'react-native';
-import { useZkp2p } from '../../../src/';
 import type {
   ProviderSettings,
-  NetworkEvent,
-  ExtractedItemsList,
+  ExtractedMetadataList,
   ProofData,
-} from '../../../src/';
-
-/* ───────────────────────── Props ───────────────────────── */
-interface Props {
-  provider: ProviderSettings;
-  interceptedPayload: NetworkEvent | null;
-  intentHash: string;
-  itemIndex: number;
-  transaction: ExtractedItemsList;
-
-  /* injected from <App /> */
-  generateProof: ReturnType<typeof useZkp2p>['generateProof'];
-  isGeneratingProof: boolean;
-  proofData: ProofData | null;
-  onGoBack: () => void;
-}
+  FlowState,
+  NetworkEvent,
+} from '../../../src';
 
 // Helper function to handle BigInt serialization for JSON.stringify
 function serializeBigInt(_key: string, value: any) {
@@ -39,134 +25,266 @@ function serializeBigInt(_key: string, value: any) {
   return value;
 }
 
+/* ───────────────────────── Props ───────────────────────── */
+interface CombinedScreenProps {
+  items: ExtractedMetadataList[];
+  onGoBack: () => void;
+  generateProof: (
+    providerCfg: ProviderSettings,
+    payload: NetworkEvent,
+    intentHash: string,
+    itemIndex?: number
+  ) => Promise<any>;
+  proofData: ProofData | null;
+  flowState: FlowState;
+  authError: Error | null;
+  zkp2pProviderConfig: ProviderSettings | null;
+  interceptedPayload: NetworkEvent | null;
+}
+
 /* ───────────────────────── Component ───────────────────── */
-export const ProofScreen: React.FC<Props> = ({
-  provider,
-  interceptedPayload,
-  intentHash,
-  itemIndex,
-  transaction,
-  generateProof,
-  isGeneratingProof,
-  proofData,
+export const ProofScreen: React.FC<CombinedScreenProps> = ({
+  items,
   onGoBack,
+  generateProof,
+  proofData,
+  flowState,
+  authError,
+  zkp2pProviderConfig,
+  interceptedPayload,
 }) => {
-  const handleGenerate = () => {
-    if (
-      !provider ||
-      !intentHash ||
-      !interceptedPayload ||
-      itemIndex === null ||
-      !generateProof
-    ) {
-      console.error('Missing required data');
+  const [selectedItemForProof, setSelectedItemForProof] =
+    useState<ExtractedMetadataList | null>(null);
+
+  const handleItemPress = async (item: ExtractedMetadataList) => {
+    if (!zkp2pProviderConfig || !generateProof || !interceptedPayload) {
+      console.error(
+        '[ProofScreen] Missing provider config or generateProof function via props.'
+      );
       return;
     }
-    generateProof(provider, interceptedPayload, intentHash, itemIndex).catch(
-      console.error
-    );
+    setSelectedItemForProof(item);
+    try {
+      const intentHash =
+        '0x0000000000000000000000000000000000000000000000000000000000000001';
+      await generateProof(
+        zkp2pProviderConfig,
+        interceptedPayload,
+        intentHash,
+        item.originalIndex
+      );
+    } catch (err) {
+      console.error('[ProofScreen] Error calling generateProof:', err);
+    }
   };
+
+  const renderTransactionItem = ({ item }: { item: ExtractedMetadataList }) => (
+    <TouchableOpacity
+      style={styles.transactionItem}
+      onPress={() => handleItemPress(item)}
+    >
+      {Object.entries(item).map(([key, value]) => {
+        if (key === 'hidden' || key === 'originalIndex') return null;
+        return (
+          <Text key={key} style={styles.transactionDetailText}>
+            <Text style={styles.transactionDetailKey}>{key}: </Text>
+            {String(value)}
+          </Text>
+        );
+      })}
+      {selectedItemForProof &&
+        selectedItemForProof.originalIndex === item.originalIndex &&
+        flowState === 'proofGenerating' && (
+          <ActivityIndicator
+            size="small"
+            color="#007AFF"
+            style={styles.activityIndicatorInItem}
+          />
+        )}
+    </TouchableOpacity>
+  );
+
+  const isGeneratingProofForSelectedItem =
+    selectedItemForProof && flowState === 'proofGenerating';
+
+  const proofSuccessfullyGeneratedForSelectedItem =
+    selectedItemForProof && flowState === 'proofGeneratedSuccess' && proofData;
+
+  const proofFailedForSelectedItem =
+    selectedItemForProof && flowState === 'proofGeneratedFailure' && authError;
 
   return (
     <View style={styles.container}>
-      {/* Header with Back Button and Title */}
       <View style={styles.headerContainer}>
         <TouchableOpacity onPress={onGoBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>‹ Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Proof Generation</Text>
+        <Text style={styles.title}>Transactions & Proof</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          {Object.entries(transaction).map(
-            ([key, value]) =>
-              key !== 'hidden' &&
-              key !== 'originalIndex' && (
-                <Text key={key} style={styles.row}>
-                  <Text style={styles.label}>{key}: </Text>
-                  <Text style={styles.value}>{String(value)}</Text>
+      <FlatList
+        data={items}
+        renderItem={renderTransactionItem}
+        keyExtractor={(item, index) =>
+          item.originalIndex?.toString() || index.toString()
+        }
+        ListHeaderComponent={
+          <Text style={styles.listTitle}>
+            Select an Item to Generate Proof:
+          </Text>
+        }
+        ListEmptyComponent={
+          <Text style={styles.emptyListText}>No transactions found.</Text>
+        }
+        contentContainerStyle={styles.listContentContainer}
+      />
+
+      {selectedItemForProof && (
+        <View style={styles.proofSectionContainer}>
+          <Text style={styles.proofSectionTitle}>
+            Proof Status for Item (Index: {selectedItemForProof.originalIndex})
+          </Text>
+          {isGeneratingProofForSelectedItem && (
+            <View style={styles.card}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.statusText}>
+                Generating proof, please wait...
+              </Text>
+            </View>
+          )}
+          {proofSuccessfullyGeneratedForSelectedItem && (
+            <View style={styles.card}>
+              <Text style={styles.resultTitle}>
+                Proof Generated Successfully!
+              </Text>
+              <ScrollView style={styles.resultScrollView}>
+                <Text style={styles.resultText}>
+                  {JSON.stringify(proofData?.proof, serializeBigInt, 2)}
                 </Text>
-              )
+              </ScrollView>
+            </View>
           )}
+          {proofFailedForSelectedItem && (
+            <View style={styles.card}>
+              <Text style={styles.errorTitle}>Proof Generation Failed</Text>
+              <Text style={styles.errorText}>{authError?.message}</Text>
+            </View>
+          )}
+          {authError &&
+            !proofFailedForSelectedItem &&
+            flowState !== 'proofGenerating' &&
+            flowState !== 'proofGeneratedSuccess' && (
+              <View style={[styles.card, styles.generalErrorCard]}>
+                <Text style={styles.errorTitle}>An Error Occurred</Text>
+                <Text style={styles.errorText}>{authError.message}</Text>
+              </View>
+            )}
         </View>
-
-        <TouchableOpacity
-          style={[styles.button, isGeneratingProof && styles.disabled]}
-          onPress={handleGenerate}
-          disabled={isGeneratingProof}
-        >
-          {isGeneratingProof ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Generate Proof</Text>
-          )}
-        </TouchableOpacity>
-
-        {proofData && (
-          <View style={styles.result}>
-            <Text style={styles.resultTitle}>Proof Data</Text>
-            <Text style={styles.resultText}>
-              {JSON.stringify(proofData.proof, serializeBigInt, 2)}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      )}
     </View>
   );
 };
 
 /* ───────────────────────── Styles ──────────────────────── */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 20 },
+  container: { flex: 1, backgroundColor: '#f0f0f0' },
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 0,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DDDDDD',
   },
-  content: { paddingHorizontal: 20, paddingBottom: 20 },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 20,
     textAlign: 'center',
     flex: 1,
+    marginLeft: -30,
+  },
+  backButton: { padding: 10, zIndex: 1 },
+  backButtonText: { color: '#007AFF', fontSize: 17 },
+
+  listContentContainer: { paddingHorizontal: 10, paddingBottom: 10 },
+  listTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginVertical: 15,
+    marginLeft: 5,
+    color: '#333',
+  },
+  emptyListText: {
+    textAlign: 'center',
+    marginTop: 50,
+    fontSize: 16,
+    color: 'grey',
   },
 
+  transactionItem: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  transactionDetailText: { fontSize: 14, color: '#333', marginBottom: 3 },
+  transactionDetailKey: { fontWeight: '500' },
+
+  activityIndicatorInItem: {
+    marginTop: 5,
+  },
+
+  proofSectionContainer: {
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#DDDDDD',
+    backgroundColor: '#f9f9f9',
+  },
+  proofSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+    color: '#222',
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 24,
-    elevation: 2,
-  },
-  row: { marginBottom: 4 },
-  label: { fontWeight: '600', color: '#333', textTransform: 'capitalize' },
-  value: { color: '#333' },
-
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1.5,
+    elevation: 1.5,
   },
-  disabled: { backgroundColor: '#bbb' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  statusText: { marginTop: 10, fontSize: 15, color: '#555' },
+  resultTitle: {
+    fontWeight: 'bold',
+    marginBottom: 10,
+    fontSize: 16,
+    color: 'green',
+  },
+  resultScrollView: { maxHeight: 150, width: '100%' },
+  resultText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 11,
+    color: '#333',
+  },
 
-  result: {
-    marginTop: 24,
-    backgroundColor: '#E3F2FD',
-    padding: 16,
-    borderRadius: 8,
+  errorTitle: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontSize: 16,
+    color: '#D8000C',
   },
-  resultTitle: { fontWeight: '600', marginBottom: 8 },
-  resultText: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  backButton: {
-    padding: 10,
-  },
-  backButtonText: {
-    color: '#007AFF',
-    fontSize: 17,
-  },
+  errorText: { fontSize: 14, color: '#D8000C', textAlign: 'center' },
+  generalErrorCard: { backgroundColor: '#FFEBEE' },
 });

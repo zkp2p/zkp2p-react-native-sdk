@@ -24,18 +24,19 @@ import type { WalletClient } from 'viem';
 import { DEFAULT_USER_AGENT } from '../utils/constants';
 import {
   type ProviderSettings,
-  type ExtractedItemsList,
+  type ExtractedMetadataList,
   type Zkp2pClientOptions,
   type PendingEntry,
   type NetworkEvent,
   type RPCResponse,
   type ProofData,
   type FlowState,
+  type StartAuthenticationOptions,
 } from '../types';
 import { Zkp2pClient } from '../client';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
 import { JSONPath } from 'jsonpath-plus';
-import { extractItemsList, safeStringify } from './utils';
+import { extractMetadata, safeStringify } from './utils';
 import { RPCWebView } from '../components/RPCWebView';
 import type { WebViewErrorEvent } from 'react-native-webview/lib/WebViewTypes';
 import CookieManager from '@react-native-cookies/cookies';
@@ -54,9 +55,6 @@ interface Zkp2pProviderProps {
   chainId?: number;
   baseApiUrl?: string;
 }
-
-export interface AuthWVOverrides
-  extends Partial<React.ComponentProps<typeof InterceptWebView>> {}
 
 const Zkp2pProvider = ({
   children,
@@ -96,14 +94,14 @@ const Zkp2pProvider = ({
   const [provider, setProvider] = useState<ProviderSettings | null>(null);
   const [flowState, setFlowState] = useState<FlowState>('idle');
   const [authError, setAuthError] = useState<Error | null>(null);
+  const [metadataList, setMetadataList] = useState<ExtractedMetadataList[]>([]);
+  const [interceptedPayload, setInterceptedPayload] =
+    useState<NetworkEvent | null>(null);
   const [authWebViewProps, setAuthWebViewProps] = useState<React.ComponentProps<
     typeof InterceptWebView
   > | null>(null);
   const [rpcKey, setRpcKey] = useState(0);
 
-  const [interceptedPayload, setInterceptedPayload] =
-    useState<NetworkEvent | null>(null);
-  const [itemsList, setItemsList] = useState<ExtractedItemsList[]>([]);
   const [proofData, setProofData] = useState<ProofData | null>(null);
 
   /*
@@ -159,214 +157,385 @@ const Zkp2pProvider = ({
       const body = await res.json();
 
       setInterceptedPayload(payload);
-      setItemsList(extractItemsList(body, cfg));
+      setMetadataList(extractMetadata(body, cfg));
       setFlowState('authenticated');
       return true;
     },
-    [setInterceptedPayload, setItemsList]
+    [setInterceptedPayload, setMetadataList]
   );
 
-  const startAction = useCallback(
+  const _getOrFetchProviderConfig = useCallback(
     async (
       platform: string,
       actionType: string,
-      onCompleted: () => Promise<void> | void = () => {},
-      overrides: AuthWVOverrides = {}
-    ) => {
-      let cfg = provider;
+      currentProviderConfig: ProviderSettings | null
+    ): Promise<ProviderSettings> => {
       if (
-        !cfg ||
-        cfg.metadata.platform !== platform ||
-        cfg.actionType !== actionType
+        currentProviderConfig &&
+        currentProviderConfig.metadata.platform === platform &&
+        currentProviderConfig.actionType === actionType
       ) {
-        cfg = await fetchProviderConfig(platform, actionType);
-        setProvider(cfg);
+        return currentProviderConfig;
       }
-      console.log('Setting provider:', cfg);
-
-      const actionUrl = cfg.mobile?.actionLink;
-      if (actionUrl?.startsWith('http')) {
-        setFlowState('actionStarted');
-        setAuthWebViewProps({
-          source: { uri: actionUrl },
-          urlPatterns: [],
-          userAgent: DEFAULT_USER_AGENT,
-          interceptConfig: { xhr: false, fetch: false, html: false },
-          additionalCookieDomainsToInclude:
-            cfg.mobile?.includeAdditionalCookieDomains ?? [],
-          style: { flex: 1 },
-          ...overrides,
-        });
-      } else if (actionUrl) {
-        setFlowState('actionStartedExternal');
-        Linking.openURL(actionUrl);
-      }
-
-      await onCompleted();
-
-      return startAuthentication(platform, actionType, overrides, cfg);
+      const newCfg = await fetchProviderConfig(platform, actionType);
+      setProvider(newCfg);
+      console.log('Setting provider (via _getOrFetchProviderConfig):', newCfg);
+      return newCfg;
     },
-    [fetchProviderConfig, startAuthentication, provider]
+    [fetchProviderConfig, setProvider]
+  );
+
+  const _handleAuthIntercept = useCallback(
+    async (evt: NetworkEvent, cfg: ProviderSettings) => {
+      console.log('onIntercept (via _handleAuthIntercept)', evt);
+      const { metadata } = cfg;
+      const primaryHit =
+        evt.request.method === metadata.method &&
+        new RegExp(metadata.urlRegex).test(evt.response.url);
+
+      const fallbackHit =
+        metadata.fallbackUrlRegex &&
+        evt.request.method === metadata.fallbackMethod &&
+        new RegExp(metadata.fallbackUrlRegex).test(evt.response.url);
+
+      if (!primaryHit && !fallbackHit) {
+        console.log(
+          '[zkp2p] intercept ignored (via _handleAuthIntercept):',
+          evt.request.method,
+          evt.response.url
+        );
+        return;
+      }
+
+      await AsyncStorage.setItem(
+        `intercepted_payload_${metadata.platform}_${cfg.actionType}`,
+        safeStringify(evt)
+      );
+
+      let jsonBody: any;
+      let itemExtractionError: Error | null = null;
+
+      try {
+        if (primaryHit) {
+          const raw = metadata.preprocessRegex
+            ? ((evt.response.body ?? '').match(
+                new RegExp(metadata.preprocessRegex)
+              )?.[1] ?? '{}')
+            : (evt.response.body ?? '{}');
+          jsonBody = JSON.parse(raw);
+        } else {
+          if (evt.request.cookie) {
+            await CookieManager.setFromResponse(
+              evt.request.url,
+              evt.request.cookie
+            );
+          }
+          const replayOpts: RequestInit = {
+            method: metadata.method,
+            headers: {
+              ...evt.request.headers,
+              'User-Agent': DEFAULT_USER_AGENT,
+            },
+            credentials: 'include',
+          };
+          if (
+            metadata.method !== 'GET' &&
+            metadata.method !== 'HEAD' &&
+            cfg.body
+          ) {
+            replayOpts.body = cfg.body;
+          }
+          if (evt.request.cookie) {
+            replayOpts.headers = {
+              ...replayOpts.headers,
+              Cookie: evt.request.cookie,
+            };
+          }
+          const resp = await fetch(cfg.url, replayOpts);
+          if (!resp.ok)
+            throw new Error(
+              `Fallback replay HTTP ${resp.status} for ${cfg.url}`
+            );
+          jsonBody = await resp.json();
+        }
+
+        console.log(
+          '[zkp2p] Attempting to extract items from JSON body (via _handleAuthIntercept):',
+          jsonBody
+        );
+        const txs = extractMetadata(jsonBody, cfg);
+        setMetadataList(txs);
+        setInterceptedPayload(evt);
+        setAuthWebViewProps(null);
+
+        if (
+          txs.length === 0 &&
+          cfg.metadata.transactionsExtraction?.transactionJsonPathListSelector
+        ) {
+          itemExtractionError = new Error(
+            'Authentication successful, but no transactions found where items were expected.'
+          );
+        }
+
+        setFlowState('authenticated');
+        setAuthError(itemExtractionError);
+      } catch (err) {
+        console.error(
+          '[zkp2p] failed to retrieve/process JSON body (via _handleAuthIntercept):',
+          err
+        );
+        setMetadataList([]);
+        setInterceptedPayload(null);
+        setAuthError(err as Error);
+        setAuthWebViewProps(null);
+        if (flowState === 'authenticating') setFlowState('idle');
+      }
+    },
+    [
+      flowState,
+      setFlowState,
+      setMetadataList,
+      setInterceptedPayload,
+      setAuthWebViewProps,
+      setAuthError,
+    ]
+  );
+
+  const _setupAuthWebViewProps = useCallback(
+    (cfg: ProviderSettings) => {
+      return {
+        source: { uri: cfg.authLink },
+        urlPatterns: [
+          cfg.metadata.urlRegex,
+          cfg.metadata.fallbackUrlRegex,
+        ].filter(Boolean) as string[],
+        userAgent: DEFAULT_USER_AGENT,
+        interceptConfig: {
+          xhr: true,
+          fetch: true,
+          html: true,
+          maxBodyBytes: 10 * 1024 * 1024,
+        },
+        additionalCookieDomainsToInclude:
+          cfg.mobile?.includeAdditionalCookieDomains ?? [],
+        style: { flex: 1 },
+        onIntercept: (evt: NetworkEvent) => _handleAuthIntercept(evt, cfg),
+        onError: (e: WebViewErrorEvent) => {
+          console.error(
+            'auth webview error (via _setupAuthWebViewProps)',
+            e.nativeEvent
+          );
+          setAuthError(new Error(String(e.nativeEvent?.description ?? e.type)));
+          setAuthWebViewProps(null);
+        },
+      };
+    },
+    [_handleAuthIntercept, setAuthError, setAuthWebViewProps]
   );
 
   const startAuthentication = useCallback(
     async (
       platform: string,
       actionType: string,
-      overrides: AuthWVOverrides = {},
-      existing?: ProviderSettings
-    ) => {
-      setFlowState('authenticating');
-      try {
-        let cfg = existing ?? provider;
-        if (
-          !cfg ||
-          cfg.metadata.platform !== platform ||
-          cfg.actionType !== actionType
-        ) {
-          cfg = await fetchProviderConfig(platform, actionType);
-          setProvider(cfg);
-        }
-        console.log('Setting provider:', cfg);
+      options: StartAuthenticationOptions = {}
+    ): Promise<ProviderSettings> => {
+      const { existingProviderConfig, initialAction } = options;
+      setAuthError(null);
+      setMetadataList([]);
+      setInterceptedPayload(null);
 
-        try {
-          const reused = await restoreSessionWith(cfg);
-          if (reused) {
-            console.log('↪︎ reused stored session – skipping WebView');
-            return cfg;
+      let cfg =
+        existingProviderConfig ??
+        (await _getOrFetchProviderConfig(platform, actionType, provider));
+
+      if (initialAction) {
+        let effectiveActionUrl =
+          initialAction.urlOverride ?? cfg.mobile?.actionLink;
+
+        if (effectiveActionUrl && initialAction.urlVariables) {
+          Object.entries(initialAction.urlVariables).forEach(([key, value]) => {
+            effectiveActionUrl = effectiveActionUrl!.replace(
+              new RegExp(`{{${key}}}`, 'g'),
+              value
+            );
+          });
+          console.log(
+            '[zkp2p] Effective Action URL with urlVariables:',
+            effectiveActionUrl
+          );
+        }
+
+        const isHttpUrl = effectiveActionUrl?.startsWith('http');
+        const openInWebView =
+          initialAction.isHttpInWebView !== undefined
+            ? initialAction.isHttpInWebView
+            : isHttpUrl;
+
+        if (effectiveActionUrl && openInWebView) {
+          setFlowState('actionStarted');
+          if (initialAction.onActionLaunched) {
+            try {
+              await initialAction.onActionLaunched();
+            } catch (e) {
+              console.error('Error in onActionLaunched:', e);
+            }
           }
-        } catch (err) {
-          console.warn('stored session invalid – falling back to WebView');
-        }
 
-        setAuthWebViewProps({
-          source: { uri: cfg.authLink },
-          urlPatterns: [cfg.metadata.urlRegex, cfg.metadata.fallbackUrlRegex],
-          userAgent: DEFAULT_USER_AGENT,
-          interceptConfig: {
-            xhr: true,
-            fetch: true,
-            html: true,
-            maxBodyBytes: 10 * 1024 * 1024,
-          },
-          additionalCookieDomainsToInclude:
-            cfg.mobile?.includeAdditionalCookieDomains ?? [],
-          style: { flex: 1 },
-          onIntercept: async (evt: NetworkEvent) => {
-            console.log('onIntercept', evt);
-            const { metadata } = cfg;
-            const primaryHit =
-              evt.request.method === metadata.method &&
-              new RegExp(metadata.urlRegex).test(evt.response.url);
-
-            const fallbackHit =
-              evt.request.method === metadata.fallbackMethod &&
-              new RegExp(metadata.fallbackUrlRegex).test(evt.response.url);
-
-            if (!primaryHit && !fallbackHit) {
+          setAuthWebViewProps({
+            source: { uri: effectiveActionUrl },
+            urlPatterns: [],
+            userAgent: DEFAULT_USER_AGENT,
+            interceptConfig: { xhr: false, fetch: false, html: false },
+            additionalCookieDomainsToInclude:
+              cfg.mobile?.includeAdditionalCookieDomains ?? [],
+            style: { flex: 1 },
+            onIntercept: (evt: NetworkEvent) => {
               console.log(
-                '[zkp2p] intercept ignored:',
+                '[zkp2p] Intercept during action phase (should be off):',
                 evt.request.method,
                 evt.response.url
               );
-              return;
-            }
-
-            await AsyncStorage.setItem(
-              `intercepted_payload_${metadata.platform}_${cfg.actionType}`,
-              safeStringify(evt)
-            );
-
-            let jsonBody: any;
-
-            try {
-              if (primaryHit) {
-                const raw = metadata.preprocessRegex
-                  ? ((evt.response.body ?? '').match(
-                      new RegExp(metadata.preprocessRegex)
-                    )?.[1] ?? '{}')
-                  : (evt.response.body ?? '{}');
-
-                jsonBody = JSON.parse(raw);
-              } else {
-                if (evt.request.cookie) {
-                  await CookieManager.setFromResponse(
-                    evt.request.url,
-                    evt.request.cookie
-                  );
-                }
-                const replayOpts: RequestInit = {
-                  method: metadata.method,
-                  headers: {
-                    ...evt.request.headers,
-                    'User-Agent': DEFAULT_USER_AGENT,
-                  },
-                  credentials: 'include',
+            },
+            injectedJavaScript: ` 
+              (function() { 
+                const buttonOpts = ${JSON.stringify(initialAction.buttonOptions || {})};
+                if (buttonOpts.hide) return;
+                const button = document.createElement('button');
+                button.innerHTML = buttonOpts.text || 'Continue to Authentication';
+                const defaultStyle = {
+                  position: 'fixed', zIndex: '9999', padding: '12px 24px',
+                  backgroundColor: '#007AFF', color: 'white', border: 'none',
+                  borderRadius: '8px', fontSize: '16px', fontWeight: '600',
+                  cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)',
+                  transition: 'all 0.2s ease', width: 'auto', margin: '0'
                 };
-                if (
-                  metadata.method !== 'GET' &&
-                  metadata.method !== 'HEAD' &&
-                  cfg.body
-                ) {
-                  replayOpts.body = cfg.body;
+                const position = buttonOpts.position || 'bottom';
+                if (position === 'bottom') { defaultStyle.right = '20px'; defaultStyle.bottom = '20px'; }
+                else if (position === 'top') { defaultStyle.top = '20px'; defaultStyle.right = '20px'; }
+                else if (position === 'center') { defaultStyle.top = '50%'; defaultStyle.left = '50%'; defaultStyle.transform = 'translate(-50%, -50%)'; }
+                else if (position === 'bottom_center') { defaultStyle.bottom = '20px'; defaultStyle.left = '50%'; defaultStyle.transform = 'translateX(-50%)'; defaultStyle.width = 'calc(100% - 40px)'; defaultStyle.maxWidth = '300px'; }
+                Object.assign(defaultStyle, buttonOpts.style || {});
+                Object.entries(defaultStyle).forEach(([k, val]) => { button.style[k] = String(val); });
+                button.addEventListener('mouseenter', function() { this.style.opacity = '0.9'; });
+                button.addEventListener('mouseleave', function() { this.style.opacity = '1'; });
+                button.onclick = function() {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION' }));
+                };
+                document.body.appendChild(button);
+              })();
+            `,
+            onMessage: async (event) => {
+              try {
+                const data = JSON.parse(event.nativeEvent.data);
+                if (data.type === 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION') {
+                  console.log(
+                    '[zkp2p] Proceeding to auth after initial HTTP action...'
+                  );
+                  setFlowState('authenticating');
+                  try {
+                    const reused = await restoreSessionWith(cfg);
+                    if (reused) {
+                      setAuthWebViewProps(null);
+                      return;
+                    }
+                  } catch (err) {
+                    console.warn(
+                      '[zkp2p] Stored session invalid after initial action button:',
+                      err
+                    );
+                  }
+                  const webViewPropsForAuth = _setupAuthWebViewProps(cfg);
+                  setAuthWebViewProps(webViewPropsForAuth);
                 }
-                if (evt.request.cookie) {
-                  replayOpts.headers = {
-                    ...replayOpts.headers,
-                    Cookie: evt.request.cookie,
-                  };
-                }
-
-                const resp = await fetch(cfg.url, replayOpts);
-                jsonBody = await resp.json();
-              }
-
-              let txs: ExtractedItemsList[] = [];
-              console.log(
-                '[zkp2p] Attempting to extract items from JSON body:',
-                jsonBody
-              );
-              txs = extractItemsList(jsonBody, cfg);
-              console.log(`[zkp2p] extracted ${txs.length} transactions:`, txs);
-
-              if (txs.length === 0) {
-                console.warn(
-                  '[zkp2p] No transactions extracted. Setting auth error.'
+              } catch (err) {
+                console.error(
+                  '[zkp2p] Failed to parse WebView message from initial action:',
+                  err
                 );
-                setAuthWebViewProps(null); // Close the WebView
-                setAuthError(
-                  new Error('Unauthorized (401) - No transactions found')
-                );
-                return;
               }
-
-              console.log(
-                '[zkp2p] Successfully extracted transactions. Setting authenticated state.'
+            },
+            onError: (e: WebViewErrorEvent) => {
+              console.error(
+                '[zkp2p] InitialAction WebView error:',
+                e.nativeEvent?.description ?? e.type
               );
-              setFlowState('authenticated');
-              setInterceptedPayload(evt);
-              setItemsList(txs);
-              setAuthWebViewProps(null); // close the modal
-            } catch (err) {
-              console.error('[zkp2p] failed to retrieve JSON body:', err);
-              setAuthError(err as Error);
+              setAuthError(
+                new Error(String(e.nativeEvent?.description ?? e.type))
+              );
               setAuthWebViewProps(null);
+              setFlowState('idle');
+            },
+          });
+          return cfg;
+        } else if (effectiveActionUrl) {
+          setFlowState('actionStartedExternal');
+          if (initialAction.onActionLaunched) {
+            try {
+              await initialAction.onActionLaunched();
+            } catch (e) {
+              console.error('Error in onActionLaunched:', e);
             }
-          },
-          onError: (e: WebViewErrorEvent) => {
-            console.error('auth webview error', e);
-            setAuthError(new Error(String(e.nativeEvent?.description ?? e)));
-            setAuthWebViewProps(null);
-          },
-          ...overrides,
-        });
+          }
+          try {
+            await Linking.openURL(effectiveActionUrl);
+          } catch (linkErr) {
+            console.error('[zkp2p] Failed to open external URL:', linkErr);
+            setAuthError(
+              new Error(`Failed to open action URL: ${effectiveActionUrl}`)
+            );
+            setFlowState('idle');
+            return cfg;
+          }
 
-        return cfg;
-      } finally {
-        setFlowState((s) => (s === 'authenticating' ? 'idle' : s));
+          if (initialAction.proceedToAuthAfterExternalAction !== true) {
+            console.log(
+              '[zkp2p] External action launched. Authentication will not proceed automatically.'
+            );
+            return cfg;
+          }
+          console.log(
+            '[zkp2p] External action launched. Proceeding to authentication...'
+          );
+        } else {
+          if (initialAction.onActionLaunched) {
+            try {
+              await initialAction.onActionLaunched();
+            } catch (e) {
+              console.error('Error in onActionLaunched:', e);
+            }
+          }
+        }
       }
+
+      setFlowState('authenticating');
+      try {
+        const reused = await restoreSessionWith(cfg);
+        if (reused) {
+          setAuthWebViewProps(null);
+          return cfg;
+        }
+      } catch (err) {
+        console.warn('[zkp2p] Stored session invalid (main auth path):', err);
+        setAuthError(err as Error);
+      }
+
+      console.log('[zkp2p] No session reused, setting up auth WebView.');
+      const webViewProps = _setupAuthWebViewProps(cfg);
+      setAuthWebViewProps(webViewProps);
+
+      return cfg;
     },
-    [fetchProviderConfig, restoreSessionWith, provider]
+    [
+      _getOrFetchProviderConfig,
+      provider,
+      restoreSessionWith,
+      _setupAuthWebViewProps,
+      setAuthWebViewProps,
+      setFlowState,
+      setAuthError,
+      setMetadataList,
+      setInterceptedPayload,
+    ]
   );
 
   const closeAuthWebView = () => setAuthWebViewProps(null);
@@ -417,14 +586,11 @@ const Zkp2pProvider = ({
 
       const { id, type } = data;
       if (type === 'createClaimStep') {
-        // Handle step updates
         console.log('Proof generation step:', data.step);
       } else if (type === 'createClaimDone') {
-        // Handle successful completion
         pending.current[id]?.resolve(data);
         delete pending.current[id];
       } else if (type === 'error') {
-        // Handle errors
         const error = new Error(data.error?.data.message || 'Unknown error');
         if (data.error?.data.stack) {
           error.stack = data.error.data.stack;
@@ -554,7 +720,7 @@ const Zkp2pProvider = ({
         setRpcKey((k) => k + 1);
       }
     },
-    [rpcRequest, witnessUrl, prover]
+    [rpcRequest, witnessUrl, prover, setFlowState, setProofData, setRpcKey]
   );
 
   /*
@@ -579,19 +745,17 @@ const Zkp2pProvider = ({
         provider,
         flowState,
         authError,
-        startAction,
+        metadataList,
+        interceptedPayload,
         startAuthentication,
         authWebViewProps,
         closeAuthWebView,
-        itemsList,
-        interceptedPayload,
         generateProof,
         proofData,
         zkp2pClient,
       }}
     >
       {children}
-      {/* Auth WebView */}
       {authWebViewProps && (
         <Modal
           transparent
@@ -616,7 +780,6 @@ const Zkp2pProvider = ({
           </View>
         </Modal>
       )}
-      {/* Hidden RPC WebView */}
       <RPCWebView key={rpcKey} {...rpcWebViewProps} />
     </Zkp2pContext.Provider>
   );

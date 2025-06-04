@@ -2,11 +2,9 @@ import { useState, useEffect } from 'react';
 import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
 import { Zkp2pProvider, useZkp2p } from '../../src/';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
-import { TransactionScreen } from './screens/TransactionScreen';
 import { ProofScreen } from './screens/ProofScreen';
 import { ApiFunctionsScreen } from './screens/ApiFunctionsScreen';
 import { HomeScreen } from './screens/HomeScreen';
-import type { ExtractedItemsList } from '../../src/types';
 
 // Viem for local wallet client
 import { createWalletClient, http } from 'viem';
@@ -28,21 +26,19 @@ console.log(`Using ephemeral account: ${account.address}`);
 
 function AppContent() {
   const [currentScreen, setCurrentScreen] = useState<
-    'home' | 'api' | 'auth' | 'transactions' | 'proof'
+    'home' | 'api' | 'auth' | 'itemsAndProof'
   >('home');
-  const [selectedItem, setSelectedItem] = useState<ExtractedItemsList | null>(
-    null
-  );
 
   const {
     provider: zkp2pProviderConfig,
     flowState,
-    interceptedPayload,
+    metadataList,
     startAuthentication,
-    itemsList,
     generateProof,
     proofData,
     zkp2pClient,
+    authError,
+    interceptedPayload,
   } = useZkp2p();
 
   const isAuthenticating =
@@ -50,41 +46,39 @@ function AppContent() {
     flowState === 'actionStarted' ||
     flowState === 'actionStartedExternal';
   const isAuthenticated = flowState === 'authenticated';
-  const isGeneratingProof = flowState === 'proofGenerating';
 
   useEffect(() => {
+    console.log(
+      '[AppContent] flowState changed:',
+      flowState,
+      'isAuthenticated:',
+      isAuthenticated
+    );
     if (zkp2pClient) {
       console.log(
         'ZKP2P Client is initialized with ephemeral wallet and available via useZkp2p()'
       );
     }
-  }, [zkp2pClient]);
-
-  // Simplified useEffect for screen changes based on ZKP2P auth
-  useEffect(() => {
-    if (itemsList.length > 0) {
-      setCurrentScreen('transactions');
-    }
-  }, [itemsList]);
+  }, [zkp2pClient, flowState, isAuthenticated]);
 
   useEffect(() => {
-    if (itemsList.length > 0 && selectedItem) {
-      setCurrentScreen('proof');
+    if (flowState === 'authenticated') {
+      setCurrentScreen('itemsAndProof');
+      console.log(
+        '[AppContent] Navigating to itemsAndProof. metadataList:',
+        JSON.stringify(metadataList, null, 2)
+      );
     }
-  }, [itemsList, selectedItem]);
+  }, [flowState, metadataList]);
 
   const handleGoBack = () => {
-    if (currentScreen === 'proof') {
-      setCurrentScreen('transactions');
-      setSelectedItem(null); // Clear selected item when going back from proof
-    } else if (
-      currentScreen === 'transactions' ||
+    if (
+      currentScreen === 'itemsAndProof' ||
       currentScreen === 'api' ||
       currentScreen === 'auth'
     ) {
       setCurrentScreen('home');
     }
-    // Potentially add more specific back navigation if needed, e.g., auth -> home
   };
 
   const screen = (() => {
@@ -115,40 +109,44 @@ function AppContent() {
       );
     }
 
-    if (currentScreen === 'transactions') {
-      return itemsList.length > 0 ? (
-        <TransactionScreen
-          transactions={itemsList}
-          onSelectTransaction={setSelectedItem}
-          onGoBack={handleGoBack}
-        />
-      ) : (
-        <View style={styles.center}>
-          {isAuthenticated ? (
-            <Text>Authenticated. No transactions found.</Text>
-          ) : (
-            <Text>Loading transactions...</Text>
-          )}
-        </View>
-      );
-    }
+    if (currentScreen === 'itemsAndProof') {
+      // Allow rendering if authenticated OR if a proof process is active/finished
+      const canRenderProofScreen =
+        (flowState === 'authenticated' ||
+          flowState === 'proofGenerating' ||
+          flowState === 'proofGeneratedSuccess' ||
+          flowState === 'proofGeneratedFailure') &&
+        generateProof;
 
-    if (currentScreen === 'proof') {
-      return zkp2pProviderConfig && selectedItem && generateProof ? (
+      return canRenderProofScreen ? (
         <ProofScreen
-          provider={zkp2pProviderConfig}
-          interceptedPayload={interceptedPayload}
-          intentHash="12345" // TODO: Placeholder, get from actual signalIntent call
-          itemIndex={selectedItem.originalIndex}
-          transaction={selectedItem}
-          generateProof={generateProof}
-          isGeneratingProof={isGeneratingProof}
-          proofData={proofData}
+          items={metadataList || []}
           onGoBack={handleGoBack}
+          generateProof={generateProof}
+          proofData={proofData}
+          flowState={flowState}
+          authError={authError}
+          zkp2pProviderConfig={zkp2pProviderConfig}
+          interceptedPayload={interceptedPayload}
         />
       ) : (
         <View style={styles.center}>
-          <Text>Missing data for proof screen.</Text>
+          <Text>Loading items or issues with proof service...</Text>
+          {!(
+            flowState === 'authenticated' ||
+            flowState === 'proofGenerating' ||
+            flowState === 'proofGeneratedSuccess' ||
+            flowState === 'proofGeneratedFailure'
+          ) && (
+            <Text style={styles.subText}>
+              Status: Not in an actionable state ({flowState}).
+            </Text>
+          )}
+          {!generateProof && (
+            <Text style={styles.subText}>
+              Status: Proof generation service not ready.
+            </Text>
+          )}
         </View>
       );
     }
@@ -169,8 +167,8 @@ export default function App() {
       walletClient={ephemeralWalletClient as any}
       apiKey={ZKP2P_API_KEY}
       chainId={31337}
-      witnessUrl="https://witness-proxy.zkp2p.xyz"
-      baseApiUrl="http://localhost:8080/v1"
+      // witnessUrl="http://localhost:8001/"
+      configBaseUrl="http://localhost:8080/"
       rpcTimeout={180000}
       prover="reclaim_snarkjs"
     >
@@ -188,6 +186,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  subText: { fontSize: 12, color: 'grey', marginTop: 5 },
   errorText: {
     color: 'red',
     fontSize: 16,

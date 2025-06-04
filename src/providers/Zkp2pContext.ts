@@ -1,62 +1,52 @@
-import { createContext } from 'react';
+import React from 'react';
+import type { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
 import type {
   ProviderSettings,
+  ExtractedMetadataList,
   NetworkEvent,
-  ExtractedItemsList,
   ProofData,
+  FlowState,
+  StartAuthenticationOptions,
 } from '../types';
 import type { Zkp2pClient } from '../client';
 
 export interface Zkp2pValues {
   /* auth */
   provider: ProviderSettings | null;
-  isAuthenticating: boolean;
+  flowState: FlowState;
   authError: Error | null;
-  startAuthentication:
-    | ((platform: string, actionType: string) => Promise<ProviderSettings>)
-    | null;
-  authWebViewProps: any;
-  closeAuthWebView: (() => void) | null;
-
-  /* tx */
-  itemsList: ExtractedItemsList[];
-
-  /* auth state */
-  isAuthenticated: boolean;
+  metadataList: ExtractedMetadataList[];
   interceptedPayload: NetworkEvent | null;
+  startAuthentication?: (
+    platform: string,
+    actionType: string,
+    options?: StartAuthenticationOptions
+  ) => Promise<ProviderSettings>;
+  authWebViewProps: React.ComponentProps<typeof InterceptWebView> | null;
+  closeAuthWebView?: () => void;
 
   /* proof */
-  generateProof:
-    | ((
-        providerCfg: ProviderSettings,
-        payload: NetworkEvent,
-        intentHash: string,
-        itemIndex?: number
-      ) => Promise<any>)
-    | null;
-  isGeneratingProof: boolean;
+  generateProof?: (
+    providerCfg: ProviderSettings,
+    payload: NetworkEvent,
+    intentHash: string,
+    itemIndex?: number
+  ) => Promise<any>;
   proofData: ProofData | null;
 
   /* client */
   zkp2pClient: Zkp2pClient | null;
 }
 
-const defaultValues: Zkp2pValues = {
+const Zkp2pContext = React.createContext<Zkp2pValues>({
   provider: null,
-  isAuthenticating: false,
+  flowState: 'idle',
   authError: null,
-  startAuthentication: null,
-  authWebViewProps: null,
-  closeAuthWebView: null,
-  itemsList: [],
-  isAuthenticated: false,
+  metadataList: [],
   interceptedPayload: null,
-  generateProof: null,
-  isGeneratingProof: false,
+  authWebViewProps: null,
   proofData: null,
   zkp2pClient: null,
-};
-
-const Zkp2pContext = createContext<Zkp2pValues>(defaultValues);
+});
 
 export default Zkp2pContext;

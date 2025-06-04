@@ -3,7 +3,7 @@ import Zkp2pContext from '../providers/Zkp2pContext';
 import type { Zkp2pValues } from '../providers/Zkp2pContext';
 import type {
   ProviderSettings,
-  ExtractedItemsList,
+  ExtractedMetadataList,
   NetworkEvent,
 } from '../types';
 import type { CreateClaimResponse } from '@zkp2p/reclaim-witness-sdk';
@@ -26,6 +26,6 @@ export default useZkp2p;
 export type {
   NetworkEvent,
   ProviderSettings,
-  ExtractedItemsList,
+  ExtractedMetadataList,
   CreateClaimResponse,
 };

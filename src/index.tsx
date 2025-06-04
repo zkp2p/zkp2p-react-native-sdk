@@ -13,7 +13,7 @@ export {
 };
 
 export type {
-  ExtractedItemsList,
+  ExtractedMetadataList,
   NetworkEvent,
   ProviderSettings,
   SignalIntentParams,
@@ -33,4 +33,6 @@ export type {
   GetPayeeDetailsRequest,
   GetPayeeDetailsResponse,
   ProofData,
+  FlowState,
+  StartAuthenticationOptions,
 } from './types';

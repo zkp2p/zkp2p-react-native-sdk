@@ -1,11 +1,32 @@
 import type { WalletClient, Hash } from 'viem';
 import type { Range } from './contract';
-import type { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
 import type { CurrencyType } from '../utils/currency';
 import type { ReclaimProof } from '../utils/reclaimProof';
+import type { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
 
 export interface AuthWVOverrides
   extends Partial<React.ComponentProps<typeof InterceptWebView>> {}
+
+// Define options interfaces to match Zkp2pContext.ts
+export interface InitialActionOptions {
+  urlOverride?: string;
+  isHttpInWebView?: boolean;
+  urlVariables?: Record<string, string>;
+  buttonOptions?: {
+    text?: string;
+    position?: 'top' | 'bottom' | 'center' | 'bottom_center';
+    style?: any; // CSS-in-JS style object
+    hide?: boolean;
+  };
+  onActionLaunched?: () => Promise<void> | void;
+  proceedToAuthAfterExternalAction?: boolean; // Default false for external, can be true
+}
+
+export interface StartAuthenticationOptions {
+  authOverrides?: AuthWVOverrides;
+  existingProviderConfig?: ProviderSettings;
+  initialAction?: InitialActionOptions;
+}
 
 export type {
   DepositView,
@@ -230,7 +251,7 @@ export type GetPayeeDetailsResponse = {
   statusCode: number;
 };
 
-export type ExtractedItemsList = {
+export type ExtractedMetadataList = {
   [k: string]: any; // dynamic columns
   hidden: boolean;
   originalIndex: number;
@@ -326,6 +347,16 @@ export type ProofData = {
   proofType: 'reclaim';
   proof: ReclaimProof;
 };
+
+export type FlowState =
+  | 'idle'
+  | 'actionStarted'
+  | 'actionStartedExternal'
+  | 'authenticating'
+  | 'authenticated'
+  | 'proofGenerating'
+  | 'proofGeneratedSuccess'
+  | 'proofGeneratedFailure';
 
 // Export on-chain view types
 export type {

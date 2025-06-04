@@ -6,14 +6,17 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import type { AuthWVOverrides, ProviderSettings } from '../../../src/';
+import type {
+  ProviderSettings,
+  StartAuthenticationOptions as SDKStartAuthenticationOptions,
+} from '../../../src/';
 
 interface Props {
   isAuthenticating: boolean;
   startAuthentication: (
     platform: string,
-    action: string,
-    overrides?: AuthWVOverrides
+    actionType: string,
+    options?: SDKStartAuthenticationOptions
   ) => Promise<ProviderSettings>;
   onGoBack: () => void;
 }
@@ -25,10 +28,48 @@ export const AuthenticationScreen: React.FC<Props> = ({
 }) => {
   const [activePlatform, setActivePlatform] = useState<string | null>(null);
 
+  const onCompletedStartAction = async () => {
+    console.log('onActionLaunched (previously onCompletedStartAction)');
+  };
+
   const handleSelect = async (platform: string, action: string) => {
     setActivePlatform(platform);
     try {
-      await startAuthentication(platform, action);
+      const urlVariables: Record<string, string> = {};
+      const currentButtonOptions = {
+        text: 'I have completed payment',
+        position: 'bottom_center' as const,
+        style: {
+          backgroundColor: '#FF3F3E',
+          color: '#FFFFFF',
+          borderRadius: '12px',
+          fontSize: '16px',
+          fontWeight: '700' as '700',
+          padding: '16px 32px',
+          boxShadow: '0 6px 20px rgba(0, 0, 0, 0.15)',
+        },
+      };
+
+      if (platform === 'mercadopago') {
+        currentButtonOptions.style = {
+          ...currentButtonOptions.style,
+          backgroundColor: '#FFE600',
+          color: '#2D3277',
+        };
+      }
+
+      const authOptions: SDKStartAuthenticationOptions = {
+        initialAction: {
+          urlVariables: urlVariables,
+          buttonOptions: currentButtonOptions,
+          onActionLaunched: onCompletedStartAction,
+        },
+        authOverrides: {},
+      };
+
+      if (startAuthentication) {
+        await startAuthentication(platform, action, authOptions);
+      }
     } finally {
       setActivePlatform(null);
     }

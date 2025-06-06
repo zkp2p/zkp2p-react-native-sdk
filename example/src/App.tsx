@@ -108,15 +108,11 @@ function AppContent() {
     }
 
     if (currentScreen === 'itemsAndProof') {
-      // Allow rendering if authenticated OR if a proof process is active/finished
+      // Allow rendering if we have metadata OR proof data, regardless of flowState
       const canRenderProofScreen =
-        (flowState === 'authenticated' ||
-          flowState === 'proofGenerating' ||
-          flowState === 'proofGeneratedSuccess' ||
-          flowState === 'proofGeneratedFailure') &&
-        generateProof;
+        (metadataList && metadataList.length > 0) || proofData;
 
-      return canRenderProofScreen ? (
+      return canRenderProofScreen && generateProof ? (
         <ProofScreen
           items={metadataList || []}
           onGoBack={handleGoBack}
@@ -129,22 +125,7 @@ function AppContent() {
         />
       ) : (
         <View style={styles.center}>
-          <Text>Loading items or issues with proof service...</Text>
-          {!(
-            flowState === 'authenticated' ||
-            flowState === 'proofGenerating' ||
-            flowState === 'proofGeneratedSuccess' ||
-            flowState === 'proofGeneratedFailure'
-          ) && (
-            <Text style={styles.subText}>
-              Status: Not in an actionable state ({flowState}).
-            </Text>
-          )}
-          {!generateProof && (
-            <Text style={styles.subText}>
-              Status: Proof generation service not ready.
-            </Text>
-          )}
+          <Text>No data available</Text>
         </View>
       );
     }

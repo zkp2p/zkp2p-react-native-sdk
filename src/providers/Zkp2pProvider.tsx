@@ -32,6 +32,7 @@ import {
   type ProofData,
   type FlowState,
   type InitiateOptions,
+  type AutoGenerateProofOptions,
 } from '../types';
 import { Zkp2pClient } from '../client';
 import { InterceptWebView } from '@zkp2p/react-native-webview-intercept';
@@ -103,6 +104,9 @@ const Zkp2pProvider = ({
   const [rpcKey, setRpcKey] = useState(0);
 
   const [proofData, setProofData] = useState<ProofData | null>(null);
+
+  const [autoGenerateOptions, setAutoGenerateOptions] =
+    useState<AutoGenerateProofOptions | null>(null);
 
   /*
    * Methods
@@ -335,8 +339,18 @@ const Zkp2pProvider = ({
 
   // Helper function to proceed to authentication flow
   const _authenticateInternal = useCallback(
-    async (cfg: ProviderSettings) => {
+    async (
+      cfg: ProviderSettings,
+      autoGenerateProof?: AutoGenerateProofOptions
+    ) => {
       setFlowState('authenticating');
+
+      // Set auto-generation options first, before any early returns
+      if (autoGenerateProof) {
+        setAutoGenerateOptions(autoGenerateProof);
+      } else {
+        setAutoGenerateOptions(null);
+      }
 
       try {
         const reused = await restoreSessionWith(cfg);
@@ -365,11 +379,27 @@ const Zkp2pProvider = ({
   // Helper function to handle HTTP actions in WebView
   const _handleHttpActionInWebView = useCallback(
     async (
-      effectiveActionUrl: string,
+      actionUrl: string,
       cfg: ProviderSettings,
-      initialAction: NonNullable<InitiateOptions['initialAction']>
+      initialAction: NonNullable<InitiateOptions['initialAction']>,
+      autoGenerateProof?: AutoGenerateProofOptions
     ) => {
       setFlowState('actionStarted');
+
+      // Apply URL variable substitutions if provided
+      let effectiveActionUrl = actionUrl;
+      if (initialAction.urlVariables) {
+        Object.entries(initialAction.urlVariables).forEach(([key, value]) => {
+          effectiveActionUrl = effectiveActionUrl.replace(
+            new RegExp(`{{${key}}}`, 'g'),
+            value
+          );
+        });
+        console.log(
+          '[zkp2p] Effective Action URL with urlVariables:',
+          effectiveActionUrl
+        );
+      }
 
       setAuthWebViewProps({
         source: { uri: effectiveActionUrl },
@@ -386,48 +416,16 @@ const Zkp2pProvider = ({
             evt.response.url
           );
         },
-        injectedJavaScript: ` 
-          (function() { 
-            const buttonOpts = ${JSON.stringify(initialAction.buttonOptions || {})};
-            if (buttonOpts.hide) return;
-            const button = document.createElement('button');
-            button.innerHTML = buttonOpts.text || 'Continue to Authentication';
-            const defaultStyle = {
-              position: 'fixed', zIndex: '9999', padding: '12px 24px',
-              backgroundColor: '#007AFF', color: 'white', border: 'none',
-              borderRadius: '8px', fontSize: '16px', fontWeight: '600',
-              cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)',
-              transition: 'all 0.2s ease', width: 'auto', margin: '0'
-            };
-            const position = buttonOpts.position || 'bottom';
-            if (position === 'bottom') { defaultStyle.right = '20px'; defaultStyle.bottom = '20px'; }
-            else if (position === 'top') { defaultStyle.top = '20px'; defaultStyle.right = '20px'; }
-            else if (position === 'center') { defaultStyle.top = '50%'; defaultStyle.left = '50%'; defaultStyle.transform = 'translate(-50%, -50%)'; }
-            else if (position === 'bottom_center') { defaultStyle.bottom = '20px'; defaultStyle.left = '50%'; defaultStyle.transform = 'translateX(-50%)'; defaultStyle.width = 'calc(100% - 40px)'; defaultStyle.maxWidth = '300px'; }
-            Object.assign(defaultStyle, buttonOpts.style || {});
-            Object.entries(defaultStyle).forEach(([k, val]) => { button.style[k] = String(val); });
-            button.addEventListener('mouseenter', function() { this.style.opacity = '0.9'; });
-            button.addEventListener('mouseleave', function() { this.style.opacity = '1'; });
-            button.onclick = function() {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION' }));
-            };
-            document.body.appendChild(button);
-          })();
-        `,
-        onMessage: async (event) => {
-          try {
-            const data = JSON.parse(event.nativeEvent.data);
-            if (data.type === 'CONTINUE_TO_AUTH_FROM_INITIAL_ACTION') {
-              console.log(
-                '[zkp2p] Proceeding to auth after initial HTTP action...'
-              );
-              await _authenticateInternal(cfg);
-            }
-          } catch (err) {
-            console.error(
-              '[zkp2p] Failed to parse WebView message from initial action:',
-              err
+        onNavigationStateChange: async (navState) => {
+          // Check if the current URL matches the target URL pattern
+          if (
+            cfg.mobile?.actionCompletedUrlRegex &&
+            new RegExp(cfg.mobile?.actionCompletedUrlRegex).test(navState.url)
+          ) {
+            console.log(
+              '[zkp2p] Target URL detected, proceeding to authentication...'
             );
+            await _authenticateInternal(cfg, autoGenerateProof);
           }
         },
         onError: (e: WebViewErrorEvent) => {
@@ -483,25 +481,25 @@ const Zkp2pProvider = ({
   );
 
   // Public method to manually proceed to authentication after external action
-  const authenticate = useCallback(async () => {
-    if (!provider) {
-      throw new Error(
-        'No provider configuration available. Call initiate first.'
-      );
-    }
+  const authenticate = useCallback(
+    async (autoGenerateProof?: AutoGenerateProofOptions) => {
+      if (!provider) {
+        throw new Error(
+          'No provider configuration available. Call initiate first.'
+        );
+      }
 
-    if (flowState !== 'actionStarted') {
-      throw new Error('Must be in actionStarted state');
-    }
-
-    await _authenticateInternal(provider);
-  }, [provider, flowState, _authenticateInternal]);
+      await _authenticateInternal(provider, autoGenerateProof);
+    },
+    [provider, _authenticateInternal]
+  );
 
   // Helper function to handle initial action flow
   const _handleInitialAction = useCallback(
     async (
       cfg: ProviderSettings,
-      initialAction: NonNullable<InitiateOptions['initialAction']>
+      initialAction: NonNullable<InitiateOptions['initialAction']>,
+      autoGenerateProof?: AutoGenerateProofOptions
     ) => {
       const effectiveActionUrl = cfg.mobile?.actionLink;
 
@@ -514,7 +512,8 @@ const Zkp2pProvider = ({
         await _handleHttpActionInWebView(
           effectiveActionUrl,
           cfg,
-          initialAction
+          initialAction,
+          autoGenerateProof
         );
       } else {
         // Non-HTTP URL - open externally and wait for manual proceed or auto-proceed
@@ -530,12 +529,14 @@ const Zkp2pProvider = ({
       actionType: string,
       options: InitiateOptions = {}
     ): Promise<ProviderSettings> => {
-      const { existingProviderConfig, initialAction } = options;
+      const { existingProviderConfig, initialAction, autoGenerateProof } =
+        options;
 
       // Reset state
       setAuthError(null);
       setMetadataList([]);
       setInterceptedPayload(null);
+      setProofData(null);
 
       // Get provider configuration
       const cfg =
@@ -543,13 +544,14 @@ const Zkp2pProvider = ({
         (await _getOrFetchProviderConfig(platform, actionType, provider));
 
       // Handle initial action if provided
-      if (initialAction) {
-        await _handleInitialAction(cfg, initialAction);
+      if (initialAction?.enabled) {
+        await _handleInitialAction(cfg, initialAction, autoGenerateProof);
         return cfg;
       }
 
       // No initial action - proceed directly to authentication
-      await _authenticateInternal(cfg);
+      await _authenticateInternal(cfg, autoGenerateProof);
+
       return cfg;
     },
     [
@@ -748,9 +750,97 @@ const Zkp2pProvider = ({
     [rpcRequest, witnessUrl, prover, setFlowState, setProofData, setRpcKey]
   );
 
+  const _handleAutoGenerateProof = useCallback(
+    async (
+      cfg: ProviderSettings,
+      payload: NetworkEvent,
+      items: ExtractedMetadataList[],
+      options: AutoGenerateProofOptions
+    ) => {
+      // Validate we have items to generate proof for
+      const targetIndex = options.itemIndex ?? 0;
+      if (!items || items.length === 0) {
+        const error = new Error(
+          'No transactions available for automatic proof generation'
+        );
+        console.error('[zkp2p] Auto-generation failed:', error);
+        options.onProofError?.(error);
+        return null;
+      }
+
+      if (targetIndex >= items.length) {
+        const error = new Error(
+          `Item index ${targetIndex} out of range (${items.length} items available)`
+        );
+        console.error('[zkp2p] Auto-generation failed:', error);
+        options.onProofError?.(error);
+        return null;
+      }
+
+      try {
+        const intentHash =
+          options.intentHash ||
+          '0x0000000000000000000000000000000000000000000000000000000000000001';
+        console.log(
+          '[zkp2p] Starting automatic proof generation for item index:',
+          targetIndex
+        );
+
+        const result = await generateProof(
+          cfg,
+          payload,
+          intentHash,
+          targetIndex
+        );
+
+        // Check if proof was generated successfully
+        if (flowState === 'proofGeneratedSuccess' && proofData) {
+          console.log('[zkp2p] Auto-generation successful');
+          options.onProofGenerated?.(proofData);
+        }
+
+        return result;
+      } catch (error) {
+        console.error('[zkp2p] Auto-generation failed:', error);
+        options.onProofError?.(error as Error);
+        // Don't set flow state to idle - let it fall back to showing transactions
+        return null;
+      }
+    },
+    [generateProof, flowState, proofData]
+  );
+
   /*
    * Effects
    */
+
+  useEffect(() => {
+    if (
+      flowState === 'authenticated' &&
+      autoGenerateOptions && // If it exists, it's enabled
+      provider &&
+      interceptedPayload &&
+      metadataList.length > 0 &&
+      !authError
+    ) {
+      console.log('[zkp2p] Triggering auto-generation after authentication');
+      _handleAutoGenerateProof(
+        provider,
+        interceptedPayload,
+        metadataList,
+        autoGenerateOptions
+      );
+    }
+  }, [
+    flowState,
+    autoGenerateOptions,
+    provider,
+    interceptedPayload,
+    metadataList,
+    authError,
+    _handleAutoGenerateProof,
+  ]);
+
   useEffect(
     () => () => {
       Object.values(pending.current).forEach(({ reject, timeout }) => {

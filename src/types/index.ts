@@ -9,20 +9,22 @@ export interface AuthWVOverrides
 
 // Define options interfaces to match Zkp2pContext.ts
 export interface InitialActionOptions {
-  urlOverride?: string;
+  enabled?: boolean;
   urlVariables?: Record<string, string>;
-  buttonOptions?: {
-    text?: string;
-    position?: 'top' | 'bottom' | 'center' | 'bottom_center';
-    style?: Record<string, string>;
-    hide?: boolean;
-  };
+}
+
+export interface AutoGenerateProofOptions {
+  intentHash?: string; // Optional custom intent hash
+  itemIndex?: number; // Optional item index, defaults to 0
+  onProofGenerated?: (proofData: ProofData) => void; // Success callback
+  onProofError?: (error: Error) => void; // Error callback
 }
 
 export interface InitiateOptions {
   authOverrides?: AuthWVOverrides;
   existingProviderConfig?: ProviderSettings;
   initialAction?: InitialActionOptions;
+  autoGenerateProof?: AutoGenerateProofOptions; // true for defaults, object for custom config
 }
 
 export type {
@@ -303,6 +305,7 @@ export interface ProviderSettings {
   mobile?: {
     includeAdditionalCookieDomains: string[];
     actionLink: string;
+    actionCompletedUrlRegex: string;
   };
 }
 

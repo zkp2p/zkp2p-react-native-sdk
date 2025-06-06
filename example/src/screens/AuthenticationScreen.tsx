@@ -27,38 +27,35 @@ export const AuthenticationScreen: React.FC<Props> = ({
   onGoBack,
 }) => {
   const [activePlatform, setActivePlatform] = useState<string | null>(null);
+  const [autoProofEnabled, setAutoProofEnabled] = useState(false);
 
   const handleSelect = async (platform: string, action: string) => {
     setActivePlatform(platform);
     try {
-      const currentButtonOptions = {
-        text: 'I have completed payment',
-        position: 'bottom_center' as const,
-        style: {
-          backgroundColor: '#FF3F3E',
-          color: '#FFFFFF',
-          borderRadius: '12px',
-          fontSize: '16px',
-          fontWeight: '700' as '700',
-          padding: '16px 32px',
-          boxShadow: '0 6px 20px rgba(0, 0, 0, 0.15)',
-        },
-      };
-
-      if (platform === 'mercadopago') {
-        currentButtonOptions.style = {
-          ...currentButtonOptions.style,
-          backgroundColor: '#FFE600',
-          color: '#2D3277',
-        };
-      }
-
       const authOptions: SDKInitiateOptions = {
-        initialAction: {
-          buttonOptions: currentButtonOptions,
-        },
-        authOverrides: {},
+        autoGenerateProof: autoProofEnabled
+          ? {
+              intentHash:
+                '0x0000000000000000000000000000000000000000000000000000000000000001',
+              itemIndex: 0,
+              onProofGenerated: (proofData) => {
+                console.log('Auto-generated proof:', proofData);
+              },
+              onProofError: (error) => {
+                console.error('Auto-generation failed:', error);
+              },
+            }
+          : undefined,
       };
+
+      // if (
+      //   platform === 'mercadopago' ||
+      //   platform === 'wise'
+      // ) {
+      //   authOptions.initialAction = {
+      //     enabled: true,
+      //   };
+      // }
 
       if (startAuthentication) {
         await startAuthentication(platform, action, authOptions);
@@ -74,6 +71,18 @@ export const AuthenticationScreen: React.FC<Props> = ({
         <Text style={styles.backButtonText}>‹ Back</Text>
       </TouchableOpacity>
       <Text style={styles.title}>Select Platform</Text>
+
+      <View style={styles.toggleContainer}>
+        <Text style={styles.toggleLabel}>Auto-generate proof:</Text>
+        <TouchableOpacity
+          style={[styles.toggle, autoProofEnabled && styles.toggleActive]}
+          onPress={() => setAutoProofEnabled(!autoProofEnabled)}
+        >
+          <Text style={styles.toggleText}>
+            {autoProofEnabled ? 'ON' : 'OFF'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         style={[
@@ -210,6 +219,41 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
     marginTop: 30,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    marginRight: 10,
+    color: '#333',
+  },
+  toggle: {
+    backgroundColor: '#ddd',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  toggleActive: {
+    backgroundColor: '#007AFF',
+  },
+  toggleText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   button: {
     backgroundColor: '#007AFF',

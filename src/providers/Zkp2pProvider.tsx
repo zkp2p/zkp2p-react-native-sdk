@@ -47,8 +47,6 @@ import CookieManager from '@react-native-cookies/cookies';
 import Zkp2pContext from './Zkp2pContext';
 import { parseReclaimProxyProof } from '../utils/reclaimProof';
 
-import { GnarkBridge } from '../bridges/GnarkBridge';
-
 interface Zkp2pProviderProps {
   children: ReactNode;
   witnessUrl?: string;
@@ -97,6 +95,7 @@ const Zkp2pProvider = ({
   const gnarkBridge = useMemo(() => {
     if (prover === 'reclaim_gnark') {
       try {
+        const { GnarkBridge } = require('../bridges/GnarkBridge');
         return new GnarkBridge();
       } catch (error) {
         console.warn(
@@ -644,31 +643,39 @@ const Zkp2pProvider = ({
   );
 
   const onRpcMessage = useCallback((e: WebViewMessageEvent) => {
-    console.log('dataNative', e.nativeEvent.data);
     try {
-      const data: RPCResponse = JSON.parse(e.nativeEvent.data);
-      console.log('RPC WebView message:', data);
+      // The RPCWebView now filters console logs, but we keep this as a safeguard.
+      // It also filters ZK function calls, so we only expect responses here.
+      const data = JSON.parse(e.nativeEvent.data);
 
-      if (!data.module || data.module !== 'attestor-core') {
+      // Early exit for any non-attestor-core messages that might slip through
+      if (!data.module || data.module !== 'attestor-core' || !data.id) {
         return;
       }
 
-      const { id, type } = data;
+      const { id, type } = data as RPCResponse;
+
       if (type === 'createClaimStep') {
         console.log('Proof generation step:', data.step);
+        // Here you could also call pending.current[id]?.onStep if you need to.
       } else if (type === 'createClaimDone') {
-        pending.current[id]?.resolve(data);
+        pending.current[id]?.resolve(data as RPCResponse);
+        clearTimeout(pending.current[id]?.timeout);
         delete pending.current[id];
       } else if (type === 'error') {
-        const error = new Error(data.error?.data.message || 'Unknown error');
-        if (data.error?.data.stack) {
-          error.stack = data.error.data.stack;
+        const error = new Error(
+          (data as any).error?.data.message || 'Unknown error'
+        );
+        if ((data as any).error?.data.stack) {
+          error.stack = (data as any).error.data.stack;
         }
         pending.current[id]?.reject(error);
+        clearTimeout(pending.current[id]?.timeout);
         delete pending.current[id];
       }
     } catch (error) {
-      console.error('Failed to parse RPC message:', error);
+      // This will catch parsing errors for messages that are not valid JSON
+      console.error('Failed to process message from WebView:', error);
     }
   }, []);
 
@@ -676,6 +683,7 @@ const Zkp2pProvider = ({
     ref: rpcWebViewRef,
     witnessUrl,
     onMessage: onRpcMessage,
+    gnarkBridge,
   } as const;
 
   const generateProof = useCallback(

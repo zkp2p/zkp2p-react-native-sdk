@@ -26,10 +26,7 @@
 @end
 #endif
 
-@interface Zkp2pGnarkModule () 
-#ifdef RCT_NEW_ARCH_ENABLED
-<NativeZkp2pGnarkModuleSpec>
-#endif
+@interface Zkp2pGnarkModule ()
 @end
 
 @implementation Zkp2pGnarkModule {
@@ -37,6 +34,8 @@
     void *_verifyHandle;
     GnarkProveFunction _proveFunction;
     GnarkVerifyFunction _verifyFunction;
+    GnarkFreeFunction _freeFunction;
+    GnarkFreeFunction _vfreeFunction;
     bool hasListeners;
 }
 
@@ -49,14 +48,18 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
 
 - (instancetype)init
 {
+    NSLog(@"[Zkp2pGnarkModule] Starting init...");
     if (self = [super init]) {
+        NSLog(@"[Zkp2pGnarkModule] super init successful. Calling loadGnarkLibraries.");
         [self loadGnarkLibraries];
     }
+    NSLog(@"[Zkp2pGnarkModule] Finished init.");
     return self;
 }
 
 - (void)dealloc
 {
+    NSLog(@"[Zkp2pGnarkModule] Deallocating.");
     if (_proveHandle) {
         dlclose(_proveHandle);
     }
@@ -67,54 +70,69 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
 
 - (void)loadGnarkLibraries
 {
+    NSLog(@"[Zkp2pGnarkModule] Attempting to load gnark libraries...");
     NSBundle *bundle = [NSBundle mainBundle];
     
-    // Load prove library
     NSString *provePath = [bundle pathForResource:@"darwin-arm64-libprove" ofType:@"so" inDirectory:@"Frameworks"];
     if (!provePath) {
-        NSLog(@"[Zkp2pGnarkModule] Could not find darwin-arm64-libprove.so in Frameworks directory");
+        NSLog(@"[Zkp2pGnarkModule] FATAL: Could not find darwin-arm64-libprove.so in Frameworks directory. Path is nil.");
         return;
     }
+    NSLog(@"[Zkp2pGnarkModule] Found prove library at path: %@", provePath);
     
     _proveHandle = dlopen([provePath UTF8String], RTLD_LAZY);
     if (!_proveHandle) {
-        NSLog(@"[Zkp2pGnarkModule] Failed to load prove library: %s", dlerror());
+        NSLog(@"[Zkp2pGnarkModule] FATAL: Failed to load prove library: %s", dlerror());
         return;
     }
+    NSLog(@"[Zkp2pGnarkModule] Successfully loaded prove library handle.");
     
     _proveFunction = (GnarkProveFunction)dlsym(_proveHandle, "Prove");
     if (!_proveFunction) {
-        NSLog(@"[Zkp2pGnarkModule] Failed to find Prove function: %s", dlerror());
+        NSLog(@"[Zkp2pGnarkModule] FATAL: Failed to find 'Prove' function in library: %s", dlerror());
+    } else {
+        NSLog(@"[Zkp2pGnarkModule] Successfully linked 'Prove' function.");
     }
     
-    // Load verify library
+    _freeFunction = (GnarkFreeFunction)dlsym(_proveHandle, "Free");
+    if (!_freeFunction) {
+        NSLog(@"[Zkp2pGnarkModule] WARNING: Failed to find 'Free' function in prove library: %s", dlerror());
+    }
+    
     NSString *verifyPath = [bundle pathForResource:@"darwin-arm64-libverify" ofType:@"so" inDirectory:@"Frameworks"];
     if (!verifyPath) {
-        NSLog(@"[Zkp2pGnarkModule] Could not find darwin-arm64-libverify.so in Frameworks directory");
+        NSLog(@"[Zkp2pGnarkModule] FATAL: Could not find darwin-arm64-libverify.so in Frameworks directory. Path is nil.");
         return;
     }
+    NSLog(@"[Zkp2pGnarkModule] Found verify library at path: %@", verifyPath);
     
     _verifyHandle = dlopen([verifyPath UTF8String], RTLD_LAZY);
     if (!_verifyHandle) {
-        NSLog(@"[Zkp2pGnarkModule] Failed to load verify library: %s", dlerror());
+        NSLog(@"[Zkp2pGnarkModule] FATAL: Failed to load verify library: %s", dlerror());
         return;
     }
+    NSLog(@"[Zkp2pGnarkModule] Successfully loaded verify library handle.");
     
     _verifyFunction = (GnarkVerifyFunction)dlsym(_verifyHandle, "Verify");
     if (!_verifyFunction) {
-        NSLog(@"[Zkp2pGnarkModule] Failed to find Verify function: %s", dlerror());
+        NSLog(@"[Zkp2pGnarkModule] FATAL: Failed to find 'Verify' function in library: %s", dlerror());
+    } else {
+        NSLog(@"[Zkp2pGnarkModule] Successfully linked 'Verify' function.");
     }
     
-    NSLog(@"[Zkp2pGnarkModule] Successfully loaded gnark libraries");
+    _vfreeFunction = (GnarkFreeFunction)dlsym(_verifyHandle, "VFree");
+    if (!_vfreeFunction) {
+        NSLog(@"[Zkp2pGnarkModule] WARNING: Failed to find 'VFree' function in verify library: %s", dlerror());
+    }
+    
+    NSLog(@"[Zkp2pGnarkModule] Finished loading gnark libraries.");
 }
 
-// Will be called when this module's first listener is added
 - (void)startObserving
 {
     hasListeners = YES;
 }
 
-// Will be called when this module's last listener is removed, or on dealloc
 - (void)stopObserving
 {
     hasListeners = NO;
@@ -151,32 +169,71 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
 {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @try {
-            // For now, we'll implement a simple example
-            // In a real implementation, you would process the args and call the appropriate function
-            
-            if ([functionName isEqualToString:@"prove"] && self->_proveFunction) {
-                // Example: Convert args to JSON string
-                NSError *jsonError;
-                NSData *jsonData = [NSJSONSerialization dataWithJSONObject:args options:0 error:&jsonError];
-                if (jsonError) {
-                    [self sendResponse:requestId type:@"error" response:nil error:@{@"message": jsonError.localizedDescription}];
-                    reject(@"JSON_ERROR", jsonError.localizedDescription, jsonError);
-                    return;
-                }
+            if ([functionName isEqualToString:@"groth16Prove"] && self->_proveFunction && args.count > 0) {
+                NSString *witnessJson = args[0];
+                NSData *witnessData = [witnessJson dataUsingEncoding:NSUTF8StringEncoding];
                 
-                NSString *argsString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-                const char *result = self->_proveFunction([argsString UTF8String], [algorithm UTF8String]);
+                // Create GoSlice from witness data
+                GoSlice witnessSlice;
+                witnessSlice.data = (void *)[witnessData bytes];
+                witnessSlice.len = [witnessData length];
+                witnessSlice.cap = [witnessData length];
                 
-                if (result) {
-                    NSString *resultString = [NSString stringWithUTF8String:result];
-                    [self sendResponse:requestId type:@"response" response:@{@"result": resultString} error:nil];
+                // Call Prove function
+                ProveReturn result = self->_proveFunction(witnessSlice);
+                
+                if (result.r0 && result.r1 > 0) {
+                    // Convert result to string
+                    NSString *resultJson = [[NSString alloc] initWithBytes:result.r0 
+                                                                    length:result.r1 
+                                                                  encoding:NSUTF8StringEncoding];
+                    
+                    // Free the memory
+                    if (self->_freeFunction) {
+                        self->_freeFunction(result.r0);
+                    }
+                    
+                    // Parse JSON result
+                    NSError *jsonError;
+                    NSData *jsonData = [resultJson dataUsingEncoding:NSUTF8StringEncoding];
+                    NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:jsonData 
+                                                                            options:0 
+                                                                              error:&jsonError];
+                    
+                    if (jsonError) {
+                        [self sendResponse:requestId type:@"error" response:nil 
+                                     error:@{@"message": jsonError.localizedDescription}];
+                        reject(@"JSON_ERROR", jsonError.localizedDescription, jsonError);
+                        return;
+                    }
+                    
+                    [self sendResponse:requestId type:@"response" response:jsonDict error:nil];
                     resolve(nil);
                 } else {
-                    [self sendResponse:requestId type:@"error" response:nil error:@{@"message": @"Prove function returned null"}];
+                    [self sendResponse:requestId type:@"error" response:nil 
+                                 error:@{@"message": @"Prove function returned null"}];
                     reject(@"PROVE_ERROR", @"Prove function returned null", nil);
                 }
+                
+            } else if ([functionName isEqualToString:@"groth16Verify"] && self->_verifyFunction && args.count > 0) {
+                NSString *verifyJson = args[0];
+                NSData *verifyData = [verifyJson dataUsingEncoding:NSUTF8StringEncoding];
+                
+                // Create GoSlice from verify data
+                GoSlice verifySlice;
+                verifySlice.data = (void *)[verifyData bytes];
+                verifySlice.len = [verifyData length];
+                verifySlice.cap = [verifyData length];
+                
+                // Call Verify function
+                unsigned char result = self->_verifyFunction(verifySlice);
+                
+                [self sendResponse:requestId type:@"response" 
+                          response:@{@"valid": @(result == 1)} error:nil];
+                resolve(nil);
+                
             } else {
-                NSString *errorMsg = [NSString stringWithFormat:@"Unknown function: %@", functionName];
+                NSString *errorMsg = [NSString stringWithFormat:@"Unknown or unimplemented function: %@", functionName];
                 [self sendResponse:requestId type:@"error" response:nil error:@{@"message": errorMsg}];
                 reject(@"UNKNOWN_FUNCTION", errorMsg, nil);
             }
@@ -194,8 +251,6 @@ RCT_EXPORT_METHOD(executeOprfFunction:(NSString *)requestId
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 {
-    // Similar implementation to executeZkFunction
-    // For now, just return an error
     NSString *errorMsg = @"OPRF functions not yet implemented";
     [self sendResponse:requestId type:@"error" response:nil error:@{@"message": errorMsg}];
     reject(@"NOT_IMPLEMENTED", errorMsg, nil);

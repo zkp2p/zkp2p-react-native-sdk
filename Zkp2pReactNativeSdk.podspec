@@ -16,8 +16,17 @@ Pod::Spec.new do |s|
   s.source_files = "ios/**/*.{h,m,mm,cpp}"
   s.private_header_files = "ios/**/*.h"
   
-  # Include gnark .so files as resources
-  s.resources = "ios/*.so"
+  s.script_phase = {
+    :name => 'Copy Gnark Libraries',
+    :script => <<-SCRIPT,
+      set -e
+      FRAMEWORKS_DIR="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+      mkdir -p "${FRAMEWORKS_DIR}"
+      cp "${PODS_TARGET_SRCROOT}/ios/darwin-arm64-libprove.so" "${FRAMEWORKS_DIR}/"
+      cp "${PODS_TARGET_SRCROOT}/ios/darwin-arm64-libverify.so" "${FRAMEWORKS_DIR}/"
+    SCRIPT
+    :execution_position => :after_compile
+  }
 
   install_modules_dependencies(s)
 end

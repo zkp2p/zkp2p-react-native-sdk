@@ -1,7 +1,6 @@
-import type { TurboModule } from 'react-native';
-import { TurboModuleRegistry } from 'react-native';
+import { NativeModules } from 'react-native';
 
-export interface Spec extends TurboModule {
+export interface Spec {
   executeZkFunction(
     requestId: string,
     functionName: string,
@@ -16,9 +15,8 @@ export interface Spec extends TurboModule {
     algorithm: string
   ): Promise<void>;
 
-  // Event emitter methods are handled automatically by TurboModule
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }
 
-export default TurboModuleRegistry.getEnforcing<Spec>('Zkp2pGnarkModule');
+export default NativeModules.Zkp2pGnarkModule as Spec;

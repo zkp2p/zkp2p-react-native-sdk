@@ -1,22 +1,28 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
-#ifdef RCT_NEW_ARCH_ENABLED
-#import <ReactCommon/RCTTurboModule.h>
-#endif
-
 NS_ASSUME_NONNULL_BEGIN
 
-@interface Zkp2pGnarkModule : RCTEventEmitter <RCTBridgeModule
-#ifdef RCT_NEW_ARCH_ENABLED
-  , RCTTurboModule
-#endif
->
+@interface Zkp2pGnarkModule : RCTEventEmitter <RCTBridgeModule>
+
+// GoSlice struct to match Go's slice type
+typedef struct {
+    void *data;
+    long long len;
+    long long cap;
+} GoSlice;
+
+// Return struct for Prove function
+typedef struct {
+    void *r0;
+    long long r1;
+} ProveReturn;
 
 // Function pointer types for gnark operations
-typedef const char* (*GnarkProveFunction)(const char* witness, const char* algorithm);
-typedef const char* (*GnarkVerifyFunction)(const char* publicSignals, const char* proof);
-typedef const char* (*GnarkOprfFunction)(const char* input, const char* key);
+typedef ProveReturn (*GnarkProveFunction)(GoSlice witness);
+typedef unsigned char (*GnarkVerifyFunction)(GoSlice params);
+typedef unsigned char (*GnarkInitAlgorithmFunction)(unsigned char id, GoSlice pk, GoSlice r1cs);
+typedef void (*GnarkFreeFunction)(void *ptr);
 
 @end
 

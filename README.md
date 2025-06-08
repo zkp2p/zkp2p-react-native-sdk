@@ -1,6 +1,6 @@
 # zkp2p-react-native-sdk
 
-React Native SDK for ZKP2P
+React Native SDK for ZKP2P with support for gnark proving
 
 ## Installation
 
@@ -36,6 +36,10 @@ const {
 </Zkp2pProvider>
 ```
 
+
+## Gnark Proving Support
+
+This SDK supports gnark proving for faster proof generation. See [GNARK_SETUP.md](docs/GNARK_SETUP.md) for setup instructions.
 
 ## Contributing
 

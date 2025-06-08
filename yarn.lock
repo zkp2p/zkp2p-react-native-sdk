@@ -4686,7 +4686,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zkp2p/zkp2p-react-native-sdk@workspace:.":
+"@zkp2p/zkp2p-react-native-sdk@workspace:*, @zkp2p/zkp2p-react-native-sdk@workspace:.":
   version: 0.0.0-use.local
   resolution: "@zkp2p/zkp2p-react-native-sdk@workspace:."
   dependencies:
@@ -16576,6 +16576,7 @@ __metadata:
     "@react-native/metro-config": 0.79.2
     "@react-native/typescript-config": 0.79.2
     "@types/react": ^19.0.0
+    "@zkp2p/zkp2p-react-native-sdk": "workspace:*"
     react: 19.0.0
     react-native: 0.79.2
     react-native-builder-bob: ^0.40.10

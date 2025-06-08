@@ -149,7 +149,7 @@ export default function App() {
       // witnessUrl="http://localhost:8001/"
       configBaseUrl="http://localhost:8080/"
       rpcTimeout={180000}
-      prover="reclaim_snarkjs"
+      prover="reclaim_gnark"
     >
       <AppContent />
     </Zkp2pProvider>

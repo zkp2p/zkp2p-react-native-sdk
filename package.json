@@ -38,7 +38,8 @@
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
-    "release": "release-it"
+    "release": "release-it",
+    "setup:gnark": "node scripts/setup-gnark.js"
   },
   "keywords": [
     "react-native",
@@ -47,14 +48,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/richardliang/zkp2p-react-native-sdk.git"
+    "url": "git+https://github.com/zkp2p/zkp2p-react-native-sdk.git"
   },
   "author": "Richard <richard@zkp2p.xyz> (https://github.com/richardliang)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/richardliang/zkp2p-react-native-sdk/issues"
+    "url": "https://github.com/zkp2p/zkp2p-react-native-sdk/issues"
   },
-  "homepage": "https://github.com/richardliang/zkp2p-react-native-sdk#readme",
+  "homepage": "https://github.com/zkp2p/zkp2p-react-native-sdk#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
     "access": "public"

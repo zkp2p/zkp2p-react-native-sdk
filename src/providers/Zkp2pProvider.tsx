@@ -47,6 +47,8 @@ import CookieManager from '@react-native-cookies/cookies';
 import Zkp2pContext from './Zkp2pContext';
 import { parseReclaimProxyProof } from '../utils/reclaimProof';
 
+import { GnarkBridge } from '../bridges/GnarkBridge';
+
 interface Zkp2pProviderProps {
   children: ReactNode;
   witnessUrl?: string;
@@ -90,6 +92,31 @@ const Zkp2pProvider = ({
 
   const rpcWebViewRef = useRef<WebView>(null);
   const pending = useRef<Record<string, PendingEntry>>({});
+
+  // Initialize gnark bridge if using gnark prover
+  const gnarkBridge = useMemo(() => {
+    if (prover === 'reclaim_gnark') {
+      try {
+        return new GnarkBridge();
+      } catch (error) {
+        console.warn(
+          '[Zkp2pProvider] Failed to initialize GnarkBridge:',
+          error
+        );
+        return null;
+      }
+    }
+    return null;
+  }, [prover]);
+
+  // Cleanup gnark bridge on unmount
+  useEffect(() => {
+    return () => {
+      if (gnarkBridge) {
+        gnarkBridge.dispose();
+      }
+    };
+  }, [gnarkBridge]);
 
   /*
    * State
@@ -659,7 +686,7 @@ const Zkp2pProvider = ({
       itemIndex: number = 0
     ) => {
       if (!payload) throw new Error('No intercepted payload available');
-      if (prover !== 'reclaim_snarkjs') {
+      if (prover !== 'reclaim_snarkjs' && prover !== 'reclaim_gnark') {
         console.warn('Unsupported prover:', prover);
         return;
       }
@@ -742,7 +769,8 @@ const Zkp2pProvider = ({
             '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
           client: { url: witnessUrl },
           zkProofConcurrency: 1,
-          zkEngine: 'snarkjs',
+          zkEngine: prover === 'reclaim_gnark' ? 'gnark' : 'snarkjs',
+          zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
         };
         console.log('RPC request:', rpc);
         const res = await rpcRequest('createClaim', rpc);

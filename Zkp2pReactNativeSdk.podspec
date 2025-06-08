@@ -11,10 +11,13 @@ Pod::Spec.new do |s|
   s.authors      = package["author"]
 
   s.platforms    = { :ios => min_ios_version_supported }
-  s.source       = { :git => "https://github.com/richardliang/zkp2p-react-native-sdk.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/zkp2p/zkp2p-react-native-sdk.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm,cpp}"
   s.private_header_files = "ios/**/*.h"
+  
+  # Include gnark .so files as resources
+  s.resources = "ios/*.so"
 
- install_modules_dependencies(s)
+  install_modules_dependencies(s)
 end

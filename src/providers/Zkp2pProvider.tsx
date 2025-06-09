@@ -13,6 +13,8 @@ import {
   Text,
   TouchableOpacity,
   Linking,
+  Animated,
+  Image,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -41,6 +43,8 @@ import { extractMetadata, safeStringify } from './utils';
 import { RPCWebView } from '../components/RPCWebView';
 import type { WebViewErrorEvent } from 'react-native-webview/lib/WebViewTypes';
 import CookieManager from '@react-native-cookies/cookies';
+import { BridgeFactory } from '../bridges/BridgeFactory';
+import type { GnarkBridge } from '../bridges/GnarkBridge';
 
 import Zkp2pContext from './Zkp2pContext';
 import { parseReclaimProxyProof } from '../utils/reclaimProof';
@@ -89,6 +93,27 @@ const Zkp2pProvider = ({
   const rpcWebViewRef = useRef<WebView>(null);
   const pending = useRef<Record<string, PendingEntry>>({});
 
+  // Initialize gnark bridge if using gnark prover
+  const gnarkBridge = useMemo<GnarkBridge | null>(() => {
+    if (prover === 'reclaim_gnark') {
+      const bridge = BridgeFactory.getGnarkBridge();
+      if (!bridge) {
+        console.warn(
+          '[Zkp2pProvider] GnarkBridge not available - native module may not be loaded'
+        );
+      }
+      return bridge;
+    }
+    return null;
+  }, [prover]);
+
+  // Cleanup bridges on unmount
+  useEffect(() => {
+    return () => {
+      BridgeFactory.dispose();
+    };
+  }, []);
+
   /*
    * State
    */
@@ -107,6 +132,10 @@ const Zkp2pProvider = ({
 
   const [autoGenerateOptions, setAutoGenerateOptions] =
     useState<AutoGenerateProofOptions | null>(null);
+  const [lastProofItemIndex, setLastProofItemIndex] = useState<number>(0);
+  const [proofError, setProofError] = useState<Error | null>(null);
+
+  const spinAnimation = useRef(new Animated.Value(0)).current;
 
   /*
    * Methods
@@ -283,6 +312,11 @@ const Zkp2pProvider = ({
 
         setFlowState('authenticated');
         setAuthError(itemExtractionError);
+
+        // Add a smooth close transition after authentication
+        setTimeout(() => {
+          setAuthWebViewProps(null);
+        }, 300);
       } catch (err) {
         console.error(
           '[zkp2p] failed to retrieve/process JSON body (via _handleAuthIntercept):',
@@ -339,21 +373,12 @@ const Zkp2pProvider = ({
 
   // Helper function to proceed to authentication flow
   const _authenticateInternal = useCallback(
-    async (
-      cfg: ProviderSettings,
-      autoGenerateProof?: AutoGenerateProofOptions
-    ) => {
+    async (cfg: ProviderSettings) => {
       setFlowState('authenticating');
-
-      // Set auto-generation options first, before any early returns
-      if (autoGenerateProof) {
-        setAutoGenerateOptions(autoGenerateProof);
-      } else {
-        setAutoGenerateOptions(null);
-      }
 
       try {
         const reused = await restoreSessionWith(cfg);
+        console.log('reusing session', reused);
         if (reused) {
           setAuthWebViewProps(null);
           return;
@@ -381,8 +406,7 @@ const Zkp2pProvider = ({
     async (
       actionUrl: string,
       cfg: ProviderSettings,
-      initialAction: NonNullable<InitiateOptions['initialAction']>,
-      autoGenerateProof?: AutoGenerateProofOptions
+      initialAction: NonNullable<InitiateOptions['initialAction']>
     ) => {
       setFlowState('actionStarted');
 
@@ -425,7 +449,7 @@ const Zkp2pProvider = ({
             console.log(
               '[zkp2p] Target URL detected, proceeding to authentication...'
             );
-            await _authenticateInternal(cfg, autoGenerateProof);
+            await _authenticateInternal(cfg);
           }
         },
         onError: (e: WebViewErrorEvent) => {
@@ -489,7 +513,13 @@ const Zkp2pProvider = ({
         );
       }
 
-      await _authenticateInternal(provider, autoGenerateProof);
+      // Only update auto-generation options if explicitly provided
+      // This allows manual authenticate() calls to override previous settings
+      if (autoGenerateProof !== undefined) {
+        setAutoGenerateOptions(autoGenerateProof || null);
+      }
+
+      await _authenticateInternal(provider);
     },
     [provider, _authenticateInternal]
   );
@@ -498,8 +528,7 @@ const Zkp2pProvider = ({
   const _handleInitialAction = useCallback(
     async (
       cfg: ProviderSettings,
-      initialAction: NonNullable<InitiateOptions['initialAction']>,
-      autoGenerateProof?: AutoGenerateProofOptions
+      initialAction: NonNullable<InitiateOptions['initialAction']>
     ) => {
       const effectiveActionUrl = cfg.mobile?.actionLink;
 
@@ -512,8 +541,7 @@ const Zkp2pProvider = ({
         await _handleHttpActionInWebView(
           effectiveActionUrl,
           cfg,
-          initialAction,
-          autoGenerateProof
+          initialAction
         );
       } else {
         // Non-HTTP URL - open externally and wait for manual proceed or auto-proceed
@@ -538,19 +566,29 @@ const Zkp2pProvider = ({
       setInterceptedPayload(null);
       setProofData(null);
 
+      // Set auto-generation options once at the beginning
+      // These will persist through the entire flow (action link → auth → proof)
+      if (autoGenerateProof) {
+        setAutoGenerateOptions(autoGenerateProof);
+      } else {
+        setAutoGenerateOptions(null);
+      }
+
       // Get provider configuration
       const cfg =
         existingProviderConfig ??
         (await _getOrFetchProviderConfig(platform, actionType, provider));
 
-      // Handle initial action if provided
-      if (initialAction?.enabled) {
-        await _handleInitialAction(cfg, initialAction, autoGenerateProof);
+      // Always handle action link if it exists
+      if (cfg.mobile?.actionLink) {
+        // If no initialAction provided, create default options
+        const actionOptions = initialAction || { enabled: true };
+        await _handleInitialAction(cfg, actionOptions);
         return cfg;
       }
 
-      // No initial action - proceed directly to authentication
-      await _authenticateInternal(cfg, autoGenerateProof);
+      // No action link - proceed directly to authentication
+      await _authenticateInternal(cfg);
 
       return cfg;
     },
@@ -594,39 +632,52 @@ const Zkp2pProvider = ({
       });
 
       console.log('Sending RPC message:', msg);
+      console.log('RPC WebView ref exists:', !!rpcWebViewRef.current);
 
-      rpcWebViewRef.current.postMessage(JSON.stringify(msg));
+      if (!rpcWebViewRef.current) {
+        console.error('[Zkp2pProvider] RPC WebView ref is null!');
+      } else {
+        rpcWebViewRef.current.postMessage(JSON.stringify(msg));
+      }
       return promise;
     },
     [rpcTimeout]
   );
 
   const onRpcMessage = useCallback((e: WebViewMessageEvent) => {
-    console.log('dataNative', e.nativeEvent.data);
     try {
-      const data: RPCResponse = JSON.parse(e.nativeEvent.data);
-      console.log('RPC WebView message:', data);
+      // The RPCWebView now filters console logs, but we keep this as a safeguard.
+      // It also filters ZK function calls, so we only expect responses here.
+      const data = JSON.parse(e.nativeEvent.data);
 
-      if (!data.module || data.module !== 'attestor-core') {
+      // Early exit for any non-attestor-core messages that might slip through
+      if (!data.module || data.module !== 'attestor-core' || !data.id) {
         return;
       }
 
-      const { id, type } = data;
+      const { id, type } = data as RPCResponse;
+
       if (type === 'createClaimStep') {
         console.log('Proof generation step:', data.step);
+        // Here you could also call pending.current[id]?.onStep if you need to.
       } else if (type === 'createClaimDone') {
-        pending.current[id]?.resolve(data);
+        pending.current[id]?.resolve(data as RPCResponse);
+        clearTimeout(pending.current[id]?.timeout);
         delete pending.current[id];
       } else if (type === 'error') {
-        const error = new Error(data.error?.data.message || 'Unknown error');
-        if (data.error?.data.stack) {
-          error.stack = data.error.data.stack;
+        const error = new Error(
+          (data as any).error?.data.message || 'Unknown error'
+        );
+        if ((data as any).error?.data.stack) {
+          error.stack = (data as any).error.data.stack;
         }
         pending.current[id]?.reject(error);
+        clearTimeout(pending.current[id]?.timeout);
         delete pending.current[id];
       }
     } catch (error) {
-      console.error('Failed to parse RPC message:', error);
+      // This will catch parsing errors for messages that are not valid JSON
+      console.error('Failed to process message from WebView:', error);
     }
   }, []);
 
@@ -634,6 +685,7 @@ const Zkp2pProvider = ({
     ref: rpcWebViewRef,
     witnessUrl,
     onMessage: onRpcMessage,
+    gnarkBridge,
   } as const;
 
   const generateProof = useCallback(
@@ -644,13 +696,15 @@ const Zkp2pProvider = ({
       itemIndex: number = 0
     ) => {
       if (!payload) throw new Error('No intercepted payload available');
-      if (prover !== 'reclaim_snarkjs') {
+      if (prover !== 'reclaim_snarkjs' && prover !== 'reclaim_gnark') {
         console.warn('Unsupported prover:', prover);
         return;
       }
 
       setFlowState('proofGenerating');
       setProofData(null);
+      setProofError(null);
+      setLastProofItemIndex(itemIndex);
       try {
         let body = payload.response.body ?? '{}';
         if (providerCfg.metadata.preprocessRegex) {
@@ -725,7 +779,8 @@ const Zkp2pProvider = ({
             '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
           client: { url: witnessUrl },
           zkProofConcurrency: 1,
-          zkEngine: 'snarkjs',
+          zkEngine: prover === 'reclaim_gnark' ? 'gnark' : 'snarkjs',
+          zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
         };
         console.log('RPC request:', rpc);
         const res = await rpcRequest('createClaim', rpc);
@@ -742,6 +797,7 @@ const Zkp2pProvider = ({
         return res;
       } catch (err) {
         setFlowState('proofGeneratedFailure');
+        setProofError(err as Error);
         throw err;
       } finally {
         setRpcKey((k) => k + 1);
@@ -818,6 +874,7 @@ const Zkp2pProvider = ({
     if (
       flowState === 'authenticated' &&
       autoGenerateOptions && // If it exists, it's enabled
+      !proofData && // Only auto-generate if no proof exists yet
       provider &&
       interceptedPayload &&
       metadataList.length > 0 &&
@@ -834,12 +891,39 @@ const Zkp2pProvider = ({
   }, [
     flowState,
     autoGenerateOptions,
+    proofData,
     provider,
     interceptedPayload,
     metadataList,
     authError,
     _handleAutoGenerateProof,
   ]);
+
+  // Animate spinner when proof is generating
+  useEffect(() => {
+    if (flowState === 'proofGenerating') {
+      const animation = Animated.loop(
+        Animated.timing(spinAnimation, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      );
+      animation.start();
+      return () => animation.stop();
+    } else if (flowState === 'proofGeneratedSuccess') {
+      // Stop spinning on success
+      spinAnimation.setValue(0);
+      // Auto-close spinner after 2 seconds
+      const timer = setTimeout(() => {
+        setFlowState('idle');
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else {
+      spinAnimation.setValue(0);
+      return () => {};
+    }
+  }, [flowState, spinAnimation]);
 
   useEffect(
     () => () => {
@@ -878,7 +962,9 @@ const Zkp2pProvider = ({
           animationType="slide"
           onRequestClose={closeAuthWebView}
         >
-          <View style={styles.nativeBackdrop}>
+          <Animated.View
+            style={[styles.nativeBackdrop, styles.nativeBackdropVisible]}
+          >
             <View style={styles.nativeWebviewContainer}>
               <View style={styles.nativeHeader}>
                 <TouchableOpacity
@@ -893,10 +979,136 @@ const Zkp2pProvider = ({
                 style={styles.nativeWebview}
               />
             </View>
-          </View>
+          </Animated.View>
         </Modal>
       )}
       <RPCWebView key={rpcKey} {...rpcWebViewProps} />
+
+      {/* Proof Generation Spinner */}
+      {(flowState === 'proofGenerating' ||
+        flowState === 'proofGeneratedSuccess' ||
+        flowState === 'proofGeneratedFailure') && (
+        <Modal transparent animationType="fade" visible={true}>
+          <View style={styles.proofSpinnerBackdrop}>
+            <View style={styles.proofSpinnerCard}>
+              <Text style={styles.proofSpinnerTitle}>
+                {flowState === 'proofGeneratedSuccess'
+                  ? 'Proof Generated!'
+                  : flowState === 'proofGeneratedFailure'
+                    ? 'Proof Generation Failed'
+                    : 'Authenticating'}
+              </Text>
+
+              <View style={styles.proofSpinnerWrapper}>
+                {/* Spinning ring */}
+                <Animated.View
+                  style={[
+                    styles.proofSpinnerRing,
+                    flowState !== 'proofGenerating' &&
+                      styles.proofSpinnerRingNonGenerating,
+                    {
+                      transform: [
+                        {
+                          rotate: spinAnimation.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0deg', '360deg'],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.proofSpinnerRingOuter,
+                      flowState === 'proofGeneratedSuccess' &&
+                        styles.proofSpinnerRingSuccess,
+                      flowState === 'proofGeneratedFailure' &&
+                        styles.proofSpinnerRingFailure,
+                    ]}
+                  />
+                </Animated.View>
+
+                {/* Logo in center */}
+                {flowState === 'proofGeneratedFailure' ? (
+                  <View
+                    style={[
+                      styles.proofSpinnerLogo,
+                      styles.proofSpinnerLogoFailure,
+                    ]}
+                  >
+                    <Text style={styles.proofSpinnerLogoText}>!</Text>
+                  </View>
+                ) : flowState === 'proofGeneratedSuccess' ? (
+                  <View
+                    style={[
+                      styles.proofSpinnerLogo,
+                      styles.proofSpinnerLogoSuccess,
+                    ]}
+                  >
+                    <Text style={styles.proofSpinnerLogoText}>✓</Text>
+                  </View>
+                ) : (
+                  <Image
+                    source={require('../assets/logo192.png')}
+                    style={styles.proofSpinnerLogoImage}
+                  />
+                )}
+              </View>
+
+              {flowState === 'proofGeneratedFailure' ? (
+                <>
+                  <Text style={styles.proofSpinnerSubtitle}>
+                    {proofError?.message ||
+                      'An error occurred while generating the proof'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={async () => {
+                      if (!provider || !interceptedPayload) return;
+                      try {
+                        const intentHash =
+                          '0x0000000000000000000000000000000000000000000000000000000000000001';
+                        await generateProof(
+                          provider,
+                          interceptedPayload,
+                          intentHash,
+                          lastProofItemIndex
+                        );
+                      } catch (err) {
+                        console.error('[zkp2p] Retry failed:', err);
+                      }
+                    }}
+                  >
+                    <Text style={styles.retryButtonText}>Retry</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => setFlowState('idle')}
+                  >
+                    <Text style={styles.closeButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.proofSpinnerSubtitle}>
+                    {flowState === 'proofGeneratedSuccess'
+                      ? 'Your proof is ready!'
+                      : 'Creating cryptographic proof...'}
+                  </Text>
+                  {flowState === 'proofGenerating' && (
+                    <Text style={styles.proofSpinnerSubtitle}>
+                      This may take up to 30s
+                    </Text>
+                  )}
+                </>
+              )}
+
+              <Text style={styles.proofSpinnerPoweredBy}>Powered by ZKP2P</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </Zkp2pContext.Provider>
   );
 };
@@ -907,6 +1119,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end',
     alignItems: 'center',
+  },
+  nativeBackdropVisible: {
+    opacity: 1,
   },
   nativeWebviewContainer: {
     width: '100%',
@@ -938,6 +1153,125 @@ const styles = StyleSheet.create({
   nativeWebview: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  // Proof Generation Spinner Styles
+  proofSpinnerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proofSpinnerCard: {
+    backgroundColor: '#171717',
+    borderRadius: 12,
+    paddingVertical: 28,
+    paddingHorizontal: 32,
+    width: '90%',
+    maxWidth: 400,
+    minHeight: 380,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  proofSpinnerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+    marginTop: 12,
+    marginBottom: 0,
+  },
+  proofSpinnerWrapper: {
+    width: 128,
+    height: 128,
+    marginTop: 32,
+    marginBottom: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proofSpinnerRing: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  proofSpinnerRingOuter: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 64,
+    borderWidth: 6,
+    borderColor: '#555',
+    borderTopColor: '#ffbd4a',
+  },
+  proofSpinnerLogo: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#ffbd4a',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proofSpinnerLogoText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#171717',
+  },
+  proofSpinnerSubtitle: {
+    fontSize: 14,
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 20,
+  },
+  proofSpinnerPoweredBy: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 'auto',
+    marginBottom: 12,
+  },
+  proofSpinnerLogoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+  },
+  retryButton: {
+    backgroundColor: '#ffbd4a',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  retryButtonText: {
+    color: '#171717',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  closeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  closeButtonText: {
+    color: '#aaa',
+    fontSize: 14,
+  },
+  proofSpinnerRingNonGenerating: {
+    opacity: 0.5,
+  },
+  proofSpinnerRingSuccess: {
+    borderColor: '#27ae60',
+    borderTopColor: '#27ae60',
+  },
+  proofSpinnerRingFailure: {
+    borderColor: '#e74c3c',
+    borderTopColor: '#e74c3c',
+  },
+  proofSpinnerLogoFailure: {
+    backgroundColor: '#e74c3c',
+  },
+  proofSpinnerLogoSuccess: {
+    backgroundColor: '#27ae60',
   },
 });
 

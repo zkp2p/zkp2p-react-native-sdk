@@ -48,15 +48,6 @@ export const AuthenticationScreen: React.FC<Props> = ({
           : undefined,
       };
 
-      // if (
-      //   platform === 'mercadopago' ||
-      //   platform === 'wise'
-      // ) {
-      //   authOptions.initialAction = {
-      //     enabled: true,
-      //   };
-      // }
-
       if (startAuthentication) {
         await startAuthentication(platform, action, authOptions);
       }

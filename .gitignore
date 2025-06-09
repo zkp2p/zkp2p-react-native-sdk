@@ -40,6 +40,17 @@ project.xcworkspace
 .settings
 local.properties
 android.iml
+android/app/build
+android/build
+android/.gradle
+android/.idea
+android/gradle
+android/gradlew
+android/gradlew.bat
+android/local.properties
+
+# Android generated assets
+android/src/main/assets/gnark-circuits/
 
 # Cocoapods
 #

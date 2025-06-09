@@ -1,0 +1,6 @@
+framework module libgnarkprover {
+  umbrella header "libgnarkprover.h"
+  
+  export *
+  module * { export * }
+} 

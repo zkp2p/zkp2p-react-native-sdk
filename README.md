@@ -1,6 +1,6 @@
 # zkp2p-react-native-sdk
 
-React Native SDK for ZKP2P
+React Native SDK for ZKP2P with support for gnark proving
 
 ## Installation
 
@@ -11,7 +11,6 @@ yarn add @react-native-async-storage/async-storage @react-native-cookies/cookies
 ```
 
 ## Usage
-
 
 ```js
 import { Zkp2pProvider, useZkp2p } from 'zkp2p-react-native-sdk';
@@ -36,6 +35,20 @@ const {
 </Zkp2pProvider>
 ```
 
+## Gnark Setup
+
+The SDK includes native gnark proving for optimal performance. Circuit files are stored in the `gnark-circuits/` directory and are automatically loaded on initialization.
+
+### Supported Algorithms
+- ChaCha20 (id: 0)
+- AES-128-CTR (id: 1)
+- AES-256-CTR (id: 2)
+
+### Native Libraries
+- iOS: Uses `libgnarkprover.xcframework`
+- Android: Uses `libgnarkprover.so`
+
+For detailed setup instructions, see [docs/GNARK_SETUP.md](docs/GNARK_SETUP.md).
 
 ## Contributing
 

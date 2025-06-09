@@ -1,6 +1,7 @@
 require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
+folly_compiler_flags = '-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -Wno-comma -Wno-shorten-64-to-32'
 
 Pod::Spec.new do |s|
   s.name         = "Zkp2pReactNativeSdk"
@@ -13,20 +14,32 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => min_ios_version_supported }
   s.source       = { :git => "https://github.com/zkp2p/zkp2p-react-native-sdk.git", :tag => "#{s.version}" }
 
-  s.source_files = "ios/**/*.{h,m,mm,cpp}"
-  s.private_header_files = "ios/**/*.h"
+  s.source_files = "ios/**/*.{h,m,mm}"
+  s.vendored_frameworks = "ios/libgnarkprover.xcframework"
   
-  s.script_phase = {
-    :name => 'Copy Gnark Libraries',
-    :script => <<-SCRIPT,
-      set -e
-      FRAMEWORKS_DIR="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
-      mkdir -p "${FRAMEWORKS_DIR}"
-      cp "${PODS_TARGET_SRCROOT}/ios/darwin-arm64-libprove.so" "${FRAMEWORKS_DIR}/"
-      cp "${PODS_TARGET_SRCROOT}/ios/darwin-arm64-libverify.so" "${FRAMEWORKS_DIR}/"
-    SCRIPT
-    :execution_position => :after_compile
-  }
+  # Use centralized gnark-circuits directory
+  s.resources = "gnark-circuits/*"
 
-  install_modules_dependencies(s)
+  # Use install_modules_dependencies helper to install the dependencies if React Native version >=0.71.0.
+  # See https://github.com/facebook/react-native/blob/febf6b7f33fdb4904669f99d795eba4c0f95d7bf/scripts/cocoapods/new_architecture.rb#L79.
+  if respond_to?(:install_modules_dependencies, true)
+    install_modules_dependencies(s)
+  else
+    s.dependency "React-Core"
+
+    # Don't install the dependencies when we run `pod install` in the old architecture.
+    if ENV['RCT_NEW_ARCH_ENABLED'] == '1' then
+      s.compiler_flags = folly_compiler_flags + " -DRCT_NEW_ARCH_ENABLED=1"
+      s.pod_target_xcconfig    = {
+          "HEADER_SEARCH_PATHS" => "\"$(PODS_ROOT)/boost\"",
+          "OTHER_CPLUSPLUSFLAGS" => "-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1",
+          "CLANG_CXX_LANGUAGE_STANDARD" => "c++17"
+      }
+      s.dependency "React-Codegen"
+      s.dependency "RCT-Folly"
+      s.dependency "RCTRequired"
+      s.dependency "RCTTypeSafety"
+      s.dependency "ReactCommon/turbomodule/core"
+    end
+  end
 end

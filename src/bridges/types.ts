@@ -1,51 +1,22 @@
-export type ZKFunctionType =
-  | 'generateWitness'
-  | 'groth16Prove'
-  | 'groth16Verify'
-  | 'prove';
-
-export type OPRFFunctionType =
-  | 'generateWitness'
-  | 'groth16Prove'
-  | 'groth16Verify'
-  | 'generateThresholdKeys'
-  | 'generateOPRFRequestData'
-  | 'finaliseOPRF'
-  | 'evaluateOPRF';
+export type ZKFunctionType = 'groth16Prove' | 'initAlgorithm';
 
 export interface ExecuteZKOpts {
-  requestId: string;
+  id: string;
   functionName: ZKFunctionType;
   args: any[];
-  algorithm: string;
+  algorithm?: string;
 }
 
-export interface ExecuteOPRFOpts {
-  requestId: string;
-  functionName: OPRFFunctionType;
-  args: any[];
-  algorithm: string;
-}
+export type RPCMessageType = 'executeZkFunctionV3' | 'zkFunctionDone' | 'error';
 
-export interface WindowRPCMessage {
-  module: 'attestor-core';
+export interface RPCMessage {
+  type: RPCMessageType;
   id: string;
-  type:
-    | 'executeZkFunctionV3'
-    | 'executeOprfFunctionV3'
-    | 'response'
-    | 'error'
-    | 'zkFunctionDone'
-    | 'oprfFunctionDone';
-  request?: ExecuteZKOpts | ExecuteOPRFOpts;
+  request?: ExecuteZKOpts;
   response?: any;
-  error?: any;
+  error?: { message: string };
 }
 
-export interface CommunicationBridge {
+export interface ZKBridge {
   executeZKFunction(opts: ExecuteZKOpts): Promise<void>;
-  executeOPRFFunction(opts: ExecuteOPRFOpts): Promise<void>;
-  addListener(callback: (message: WindowRPCMessage) => void): void;
-  removeListener(callback: (message: WindowRPCMessage) => void): void;
-  dispose(): void;
 }

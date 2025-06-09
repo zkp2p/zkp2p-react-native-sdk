@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { SafeAreaView, StyleSheet, View, Text } from 'react-native';
+import { SafeAreaView, StyleSheet, View, Text, Platform } from 'react-native';
 import { Zkp2pProvider, useZkp2p } from '../../src/';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
 import { ProofScreen } from './screens/ProofScreen';
@@ -46,12 +46,6 @@ function AppContent() {
   const isAuthenticated = flowState === 'authenticated';
 
   useEffect(() => {
-    console.log(
-      '[AppContent] flowState changed:',
-      flowState,
-      'isAuthenticated:',
-      isAuthenticated
-    );
     if (zkp2pClient) {
       console.log(
         'ZKP2P Client is initialized with ephemeral wallet and available via useZkp2p()'
@@ -147,7 +141,11 @@ export default function App() {
       apiKey={ZKP2P_API_KEY}
       chainId={31337}
       // witnessUrl="http://localhost:8001/"
-      configBaseUrl="http://localhost:8080/"
+      configBaseUrl={
+        Platform.OS === 'android'
+          ? 'http://10.0.2.2:8080/' // Android emulator host
+          : 'http://localhost:8080/' // iOS/web
+      }
       rpcTimeout={180000}
       prover="reclaim_gnark"
     >

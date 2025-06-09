@@ -46,13 +46,37 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
 
             try {
               const { fn, args } = data.request;
+              const algorithm = data.request.algorithm || 'aes-256-ctr';
               let result: any;
 
               switch (fn) {
                 case 'groth16Prove': {
-                  const witness = args[0];
+                  let witness = args[0];
+                  console.log('[RPCWebView] Algorithm:', algorithm);
+
+                  // Check if witness is in RPC wrapper format and decode it
+                  if (
+                    typeof witness === 'object' &&
+                    witness.type === 'uint8array' &&
+                    witness.value
+                  ) {
+                    console.log('[RPCWebView] Decoding RPC wrapper format...');
+                    // Decode base64 to get the actual witness JSON
+                    witness = atob(witness.value);
+                  }
+
+                  console.log(
+                    '[RPCWebView] Witness preview:',
+                    witness.substring(0, 200)
+                  );
                   console.log('[RPCWebView] Calling native gnarkBridge.prove');
-                  const proofResult = await gnarkBridge.prove(witness);
+
+                  const proofResult = await gnarkBridge.prove(
+                    witness,
+                    algorithm
+                  );
+                  console.log('[RPCWebView] Proof result:', proofResult);
+
                   result = {
                     proof: proofResult.proof,
                     publicSignals: proofResult.publicSignals,
@@ -60,28 +84,16 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
                   break;
                 }
 
-                case 'groth16Verify': {
-                  const publicSignals = args[0];
-                  const proof = args[1];
-                  const algorithm = 'aes-256-ctr';
-                  console.log('[RPCWebView] Calling native gnarkBridge.verify');
-                  const isValid = await gnarkBridge.verify(
-                    algorithm,
-                    proof,
-                    publicSignals
-                  );
-                  result = isValid;
-                  break;
-                }
-
                 default:
-                  throw new Error(`Unsupported ZK function for gnark: ${fn}`);
+                  throw new Error(
+                    `Unsupported ZK function for gnark: ${fn}. Only groth16Prove is supported.`
+                  );
               }
 
               const response = {
                 id: data.id,
                 module: data.module || 'attestor-core',
-                type: 'executeZkFunctionV3',
+                type: 'executeZkFunctionV3Done',
                 isResponse: true,
                 response: result,
               };
@@ -173,7 +185,7 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
             try {
               if(event.data && typeof event.data === 'string') {
                 const parsed = JSON.parse(event.data);
-                if (parsed.isResponse && (parsed.type === 'executeZkFunctionV3' || parsed.type === 'error')) {
+                if (parsed.isResponse && (parsed.type === 'executeZkFunctionV3Done' || parsed.type === 'error')) {
                   console.log('[WebView Interceptor] Received ZK response from RN:', parsed);
                   window.dispatchEvent(new MessageEvent('message', {
                     data: parsed,
@@ -200,8 +212,18 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
           originWhitelist={['*']}
           javaScriptEnabled={true}
           onMessage={handleMessage}
-          onLoad={onLoad}
-          onError={onError}
+          onLoad={() => {
+            console.log(
+              '[RPCWebView] WebView loaded successfully from:',
+              `${witnessUrl}/browser-rpc`
+            );
+            onLoad?.();
+          }}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.error('[RPCWebView] WebView error:', nativeEvent);
+            onError?.(nativeEvent);
+          }}
           injectedJavaScript={injectedJavaScript}
           webviewDebuggingEnabled={__DEV__}
         />

@@ -43,6 +43,8 @@ import { extractMetadata, safeStringify } from './utils';
 import { RPCWebView } from '../components/RPCWebView';
 import type { WebViewErrorEvent } from 'react-native-webview/lib/WebViewTypes';
 import CookieManager from '@react-native-cookies/cookies';
+import { BridgeFactory } from '../bridges/BridgeFactory';
+import type { GnarkBridge } from '../bridges/GnarkBridge';
 
 import Zkp2pContext from './Zkp2pContext';
 import { parseReclaimProxyProof } from '../utils/reclaimProof';
@@ -92,30 +94,25 @@ const Zkp2pProvider = ({
   const pending = useRef<Record<string, PendingEntry>>({});
 
   // Initialize gnark bridge if using gnark prover
-  const gnarkBridge = useMemo(() => {
+  const gnarkBridge = useMemo<GnarkBridge | null>(() => {
     if (prover === 'reclaim_gnark') {
-      try {
-        const { GnarkBridge } = require('../bridges/GnarkBridge');
-        return new GnarkBridge();
-      } catch (error) {
+      const bridge = BridgeFactory.getGnarkBridge();
+      if (!bridge) {
         console.warn(
-          '[Zkp2pProvider] Failed to initialize GnarkBridge:',
-          error
+          '[Zkp2pProvider] GnarkBridge not available - native module may not be loaded'
         );
-        return null;
       }
+      return bridge;
     }
     return null;
   }, [prover]);
 
-  // Cleanup gnark bridge on unmount
+  // Cleanup bridges on unmount
   useEffect(() => {
     return () => {
-      if (gnarkBridge) {
-        gnarkBridge.dispose();
-      }
+      BridgeFactory.dispose();
     };
-  }, [gnarkBridge]);
+  }, []);
 
   /*
    * State
@@ -635,8 +632,13 @@ const Zkp2pProvider = ({
       });
 
       console.log('Sending RPC message:', msg);
+      console.log('RPC WebView ref exists:', !!rpcWebViewRef.current);
 
-      rpcWebViewRef.current.postMessage(JSON.stringify(msg));
+      if (!rpcWebViewRef.current) {
+        console.error('[Zkp2pProvider] RPC WebView ref is null!');
+      } else {
+        rpcWebViewRef.current.postMessage(JSON.stringify(msg));
+      }
       return promise;
     },
     [rpcTimeout]

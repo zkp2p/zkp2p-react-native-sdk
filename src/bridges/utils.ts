@@ -1,34 +1,29 @@
-import type { CommunicationBridge, WindowRPCMessage } from './types';
-
 export function generateRpcRequestId(): string {
   return Math.random().toString(16).slice(2);
 }
 
-export function waitForResponse(
-  type: 'executeZkFunctionV3' | 'executeOprfFunctionV3',
+export function createRPCMessage(
   id: string,
-  bridge: CommunicationBridge,
-  timeout: number = 30000
-): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      bridge.removeListener(listener);
-      reject(new Error(`RPC timeout for ${type} with id ${id}`));
-    }, timeout);
+  type: 'executeZkFunctionV3',
+  request: any
+): any {
+  return {
+    module: 'attestor-core',
+    id,
+    type,
+    request,
+  };
+}
 
-    const listener = (message: WindowRPCMessage) => {
-      if (message.id === id) {
-        clearTimeout(timer);
-        bridge.removeListener(listener);
+export function isRPCResponse(message: any): boolean {
+  return (
+    message && message.module === 'attestor-core' && message.isResponse === true
+  );
+}
 
-        if (message.type === 'error') {
-          reject(new Error(message.error?.message || 'Unknown error'));
-        } else {
-          resolve(message.response);
-        }
-      }
-    };
-
-    bridge.addListener(listener);
-  });
+export function parseRPCError(error: any): Error {
+  if (error && error.message) {
+    return new Error(error.message);
+  }
+  return new Error('Unknown RPC error');
 }

@@ -175,4 +175,11 @@ These libraries are architecture-specific:
 - Support for custom circuits
 - OPRF implementation
 - Performance monitoring and metrics
-- Circuit caching for faster subsequent proofs 
+- Circuit caching for faster subsequent proofs
+
+## Features
+
+- Native gnark proving for optimal performance
+- Support for multiple encryption algorithms (AES-128, AES-256, ChaCha20)
+- Automatic circuit file loading
+- Cross-platform support (iOS and Android) 

@@ -1,259 +1,224 @@
 package com.zkp2preactnativesdk
 
+import android.util.Log
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.json.JSONArray
 import java.io.File
+import java.io.InputStream
 
 class Zkp2pGnarkModule(reactContext: ReactApplicationContext) : 
     ReactContextBaseJavaModule(reactContext) {
 
-    private val gnarkLibraries = mutableMapOf<String, Long>()
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val initializedAlgorithms = mutableSetOf<String>()
+    
+    // Algorithm configuration matching iOS
+    data class AlgorithmConfig(
+        val name: String,
+        val id: Int,
+        val fileExt: String
+    )
+    
+    companion object {
+        const val NAME = "Zkp2pGnarkModule"
+        
+        // Algorithm IDs must match Go constants
+        private val ALGORITHM_CONFIGS = arrayOf(
+            AlgorithmConfig("chacha20", 0, "chacha20"),      // CHACHA20 = 0
+            AlgorithmConfig("aes-128-ctr", 1, "aes128"),     // AES_128 = 1
+            AlgorithmConfig("aes-256-ctr", 2, "aes256")      // AES_256 = 2
+        )
 
-    init {
-        loadGnarkLibraries()
-    }
-
-    override fun getName(): String = "Zkp2pGnarkModule"
-
-    private fun loadGnarkLibraries() {
-        try {
-            // Determine architecture
-            val arch = when (System.getProperty("os.arch")) {
-                "aarch64" -> "arm64"
-                "x86_64" -> "x86_64"
-                else -> throw Exception("Unsupported architecture: ${System.getProperty("os.arch")}")
+        init {
+            try {
+                // Load the single gnarkprover library
+                System.loadLibrary("gnarkprover")
+                Log.i(NAME, "Successfully loaded gnarkprover native library.")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e(
+                    NAME,
+                    "FATAL: Failed to load gnarkprover native library. " +
+                    "Ensure libgnarkprover.so is in the correct jniLibs directory.",
+                    e
+                )
+                throw e
             }
-
-            // Load prove library
-            val proveLibName = "linux-$arch-libprove"
-            System.loadLibrary(proveLibName)
-            
-            // Load verify library
-            val verifyLibName = "linux-$arch-libverify"
-            System.loadLibrary(verifyLibName)
-            
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
+
+    init {
+        Log.d(NAME, "Zkp2pGnarkModule initialized")
+        initializeAllAlgorithms()
+    }
+
+    override fun getName(): String = NAME
+
+    override fun invalidate() {
+        super.invalidate()
+        coroutineScope.cancel()
+    }
+    
+    private fun initializeAllAlgorithms() {
+        Log.d(NAME, "Initializing all algorithms...")
+        
+        for (config in ALGORITHM_CONFIGS) {
+            try {
+                // Look for circuit files in assets
+                val pkFilename = "pk.${config.fileExt}"
+                val r1csFilename = "r1cs.${config.fileExt}"
+                
+                Log.d(NAME, "Loading circuit files for ${config.name}:")
+                Log.d(NAME, "  PK: $pkFilename")
+                Log.d(NAME, "  R1CS: $r1csFilename")
+                
+                // Read circuit files from assets
+                val pkData = readAssetFile(pkFilename)
+                val r1csData = readAssetFile(r1csFilename)
+                
+                if (pkData == null || r1csData == null) {
+                    Log.w(NAME, "WARNING: Circuit files not found for ${config.name}")
+                    continue
+                }
+                
+                Log.d(NAME, "  PK size: ${pkData.size} bytes")
+                Log.d(NAME, "  R1CS size: ${r1csData.size} bytes")
+                
+                // Initialize algorithm using native method
+                val result = nativeInitAlgorithm(config.id, pkData, r1csData)
+                
+                if (result == 1) {
+                    initializedAlgorithms.add(config.name)
+                    Log.d(NAME, "✓ Initialized ${config.name} (id: ${config.id})")
+                } else {
+                    Log.e(NAME, "✗ Failed to initialize ${config.name} (id: ${config.id})")
+                }
+                
+            } catch (e: Exception) {
+                Log.e(NAME, "Error initializing ${config.name}", e)
+            }
+        }
+        
+        Log.d(NAME, "Initialization complete. Available algorithms: ${initializedAlgorithms.joinToString(", ")}")
+    }
+    
+    private fun readAssetFile(filename: String): ByteArray? {
+        return try {
+            reactApplicationContext.assets.open("gnark-circuits/$filename").use { inputStream ->
+                inputStream.readBytes()
+            }
+        } catch (e: Exception) {
+            Log.e(NAME, "Failed to read asset file: $filename", e)
+            null
+        }
+    }
+
+
 
     @ReactMethod
     fun executeZkFunction(
         requestId: String,
         functionName: String,
         args: ReadableArray,
-        algorithm: String
+        algorithm: String,
+        promise: Promise
     ) {
         coroutineScope.launch {
             try {
-                val result = when (functionName) {
-                    "groth16Prove" -> groth16Prove(args, algorithm)
-                    "groth16Verify" -> groth16Verify(args, algorithm)
-                    "generateWitness" -> {
-                        // Witness generation is handled in JS
-                        args.getMap(0)
+                when (functionName) {
+                    "groth16Prove" -> {
+                        Log.d(NAME, "groth16Prove called")
+                        Log.d(NAME, "  Algorithm parameter: $algorithm")
+                        Log.d(NAME, "  Available algorithms: ${initializedAlgorithms.joinToString(", ")}")
+                        
+                        if (initializedAlgorithms.isEmpty()) {
+                            throw Exception("No algorithms have been initialized. Circuit files may be missing.")
+                        }
+                        
+                        val result = groth16Prove(args)
+                        sendResponse(requestId, result, null)
+                        promise.resolve(null)
                     }
-                    else -> throw Exception("Unsupported function: $functionName")
-                }
-
-                sendEvent(requestId, result, null)
-            } catch (e: Exception) {
-                sendEvent(requestId, null, e)
-            }
-        }
-    }
-
-    @ReactMethod
-    fun executeOprfFunction(
-        requestId: String,
-        functionName: String,
-        args: ReadableArray,
-        algorithm: String
-    ) {
-        coroutineScope.launch {
-            try {
-                val result = when (functionName) {
-                    "generateThresholdKeys" -> generateThresholdKeys(args)
-                    "generateOPRFRequestData" -> generateOPRFRequestData(args)
-                    "finaliseOPRF" -> finaliseOPRF(args)
-                    "evaluateOPRF" -> evaluateOPRF(args)
-                    "groth16Prove", "groth16Verify", "generateWitness" -> {
-                        // Fallback to ZK functions
-                        executeZkFunctionInternal(functionName, args, algorithm)
+                    "groth16Verify" -> {
+                        // Verification is server-side according to the README
+                        throw Exception("Verification is not implemented on the client")
                     }
-                    else -> throw Exception("Unsupported function: $functionName")
+                    else -> throw Exception("Unsupported ZK function: $functionName")
                 }
-
-                sendEvent(requestId, result, null)
             } catch (e: Exception) {
-                sendEvent(requestId, null, e)
+                Log.e(NAME, "ZK function execution failed", e)
+                sendResponse(requestId, null, e)
+                promise.reject("EXECUTION_ERROR", e.message, e)
             }
         }
     }
 
-    private fun executeZkFunctionInternal(
-        functionName: String,
-        args: ReadableArray,
-        algorithm: String
-    ): Any? {
-        return when (functionName) {
-            "groth16Prove" -> groth16Prove(args, algorithm)
-            "groth16Verify" -> groth16Verify(args, algorithm)
-            "generateWitness" -> args.getMap(0)
-            else -> throw Exception("Unsupported function: $functionName")
-        }
-    }
-
-    private fun groth16Prove(args: ReadableArray, algorithm: String): WritableMap {
-        val witness = args.getMap(0) ?: throw Exception("Invalid witness data")
+    private fun groth16Prove(args: ReadableArray): WritableMap {
+        val witnessJson = args.getString(0) ?: throw IllegalArgumentException("Witness JSON string is null")
         
-        // Convert witness to JSON
-        val witnessJson = JSONObject().apply {
-            witness.toHashMap().forEach { (key, value) ->
-                put(key, value)
-            }
-        }.toString()
-
-        // Call native prove function
-        val functionName = "prove_${algorithm.replace("-", "_")}"
-        val resultJson = nativeProve(functionName, witnessJson)
+        // Log witness preview
+        val witnessPreview = if (witnessJson.length > 200) {
+            witnessJson.substring(0, 200) + "..."
+        } else {
+            witnessJson
+        }
+        Log.d(NAME, "Witness preview: $witnessPreview")
         
-        // Parse result
-        val resultObj = JSONObject(resultJson)
-        return Arguments.createMap().apply {
-            putMap("proof", parseJsonToMap(resultObj.getJSONObject("proof")))
-            putArray("publicSignals", parseJsonArray(resultObj.getJSONArray("publicSignals")))
-        }
-    }
-
-    private fun groth16Verify(args: ReadableArray, algorithm: String): Boolean {
-        val publicSignals = args.getArray(0) ?: throw Exception("Invalid public signals")
-        val proof = args.getMap(1) ?: throw Exception("Invalid proof")
-
-        // Convert to JSON
-        val verifyInput = JSONObject().apply {
-            put("publicSignals", JSONArray().apply {
-                for (i in 0 until publicSignals.size()) {
-                    put(publicSignals.getString(i))
-                }
-            })
-            put("proof", JSONObject().apply {
-                proof.toHashMap().forEach { (key, value) ->
-                    put(key, value)
-                }
-            })
-        }.toString()
-
-        // Call native verify function
-        val functionName = "verify_${algorithm.replace("-", "_")}"
-        return nativeVerify(functionName, verifyInput) == 1
-    }
-
-    // OPRF function stubs
-    private fun generateThresholdKeys(args: ReadableArray): WritableMap {
-        return Arguments.createMap().apply {
-            putArray("keys", Arguments.createArray())
-            putString("publicKey", "")
-        }
-    }
-
-    private fun generateOPRFRequestData(args: ReadableArray): WritableMap {
-        return Arguments.createMap().apply {
-            putString("request", "")
-            putString("blindingFactor", "")
-        }
-    }
-
-    private fun finaliseOPRF(args: ReadableArray): WritableMap {
-        return Arguments.createMap().apply {
-            putString("output", "")
-        }
-    }
-
-    private fun evaluateOPRF(args: ReadableArray): WritableMap {
-        return Arguments.createMap().apply {
-            putString("response", "")
-        }
-    }
-
-    private fun sendEvent(requestId: String, response: Any?, error: Exception?) {
-        val params = Arguments.createMap().apply {
-            putString("id", requestId)
+        Log.d(NAME, "Calling Prove function...")
+        
+        val resultJson = nativeProve(witnessJson)
+        
+        Log.d(NAME, "Prove result length: ${resultJson.length}")
+        
+        // Parse the result JSON
+        return try {
+            val resultObj = JSONObject(resultJson)
             
+            // The response format should match what the RPC system expects
+            Arguments.createMap().apply {
+                putString("proof", resultObj.optString("proof", ""))
+                putString("publicSignals", resultObj.optString("publicSignals", ""))
+            }
+        } catch (e: Exception) {
+            // The result is not valid JSON, treat it as an error message
+            Log.e(NAME, "ERROR from gnark: $resultJson")
+            throw Exception("Failed to parse proof result")
+        }
+    }
+
+    private fun sendResponse(requestId: String, response: WritableMap?, error: Exception?) {
+        val body = Arguments.createMap().apply {
+            putString("id", requestId)
+            putString("type", if (error != null) "error" else "response")
+
             if (error != null) {
-                putNull("response")
                 putMap("error", Arguments.createMap().apply {
                     putString("message", error.message ?: "Unknown error")
-                    putString("name", error.javaClass.simpleName)
                 })
-            } else {
-                when (response) {
-                    is WritableMap -> putMap("response", response)
-                    is Boolean -> putBoolean("response", response)
-                    is String -> putString("response", response)
-                    else -> putNull("response")
-                }
-                putNull("error")
+            } else if (response != null) {
+                putMap("response", response)
             }
         }
 
         reactApplicationContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("GnarkRPCResponse", params)
-    }
-
-    private fun parseJsonToMap(json: JSONObject): WritableMap {
-        return Arguments.createMap().apply {
-            json.keys().forEach { key ->
-                when (val value = json.get(key)) {
-                    is String -> putString(key, value)
-                    is Int -> putInt(key, value)
-                    is Double -> putDouble(key, value)
-                    is Boolean -> putBoolean(key, value)
-                    is JSONObject -> putMap(key, parseJsonToMap(value))
-                    is JSONArray -> putArray(key, parseJsonArray(value))
-                }
-            }
-        }
-    }
-
-    private fun parseJsonArray(json: JSONArray): WritableArray {
-        return Arguments.createArray().apply {
-            for (i in 0 until json.length()) {
-                when (val value = json.get(i)) {
-                    is String -> pushString(value)
-                    is Int -> pushInt(value)
-                    is Double -> pushDouble(value)
-                    is Boolean -> pushBoolean(value)
-                    is JSONObject -> pushMap(parseJsonToMap(value))
-                    is JSONArray -> pushArray(parseJsonArray(value))
-                }
-            }
-        }
+            .emit("GnarkRPCResponse", body)
     }
 
     // Native method declarations
-    private external fun nativeProve(functionName: String, witnessJson: String): String
-    private external fun nativeVerify(functionName: String, verifyInputJson: String): Int
+    private external fun nativeInitAlgorithm(algorithmId: Int, provingKey: ByteArray, r1cs: ByteArray): Int
+    private external fun nativeProve(witnessJson: String): String
 
-    companion object {
-        init {
-            // Ensure native libraries are loaded
-            try {
-                val arch = when (System.getProperty("os.arch")) {
-                    "aarch64" -> "arm64"
-                    "x86_64" -> "x86_64"
-                    else -> "x86_64"
-                }
-                System.loadLibrary("linux-$arch-libprove")
-                System.loadLibrary("linux-$arch-libverify")
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+    // Event emitter methods
+    @ReactMethod
+    fun addListener(eventName: String) {
+        // Keep track of listeners if needed
+    }
+
+    @ReactMethod
+    fun removeListeners(count: Int) {
+        // Remove listeners if needed
     }
 } 

@@ -84,6 +84,7 @@
     "react": "19.0.0",
     "react-native": "0.79.2",
     "react-native-builder-bob": "^0.40.10",
+    "react-native-svg": "^15.12.0",
     "react-native-webview": "^13.13.5",
     "release-it": "^17.10.0",
     "turbo": "^1.10.7",
@@ -95,6 +96,7 @@
     "@react-native-cookies/cookies": "*",
     "react": "*",
     "react-native": "*",
+    "react-native-svg": "*",
     "react-native-webview": "*",
     "viem": "^2.21.55"
   },

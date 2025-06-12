@@ -29,7 +29,6 @@ class NativeModuleServiceImpl implements NativeModuleServiceInterface {
 
       if (module && typeof module.executeZkFunction === 'function') {
         this.gnarkModule = module;
-        console.log('[NativeModuleService] Gnark module loaded successfully');
       } else {
         console.warn(
           '[NativeModuleService] Gnark module not available or invalid'

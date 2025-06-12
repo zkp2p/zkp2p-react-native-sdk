@@ -53,7 +53,6 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"[Zkp2pGnarkModule] Initialized");
         self.initializedAlgorithms = [NSMutableSet set];
         self.algorithmIdMap = [NSMutableDictionary dictionary];
         
@@ -74,7 +73,6 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
 
 - (void)initializeAllAlgorithms
 {
-    NSLog(@"[Zkp2pGnarkModule] Initializing all algorithms...");
     
     NSBundle *mainBundle = [NSBundle mainBundle];
     
@@ -90,15 +88,11 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
         NSString *r1csPath = [mainBundle pathForResource:r1csFilename ofType:nil];
         
         if (!pkPath || !r1csPath) {
-            NSLog(@"[Zkp2pGnarkModule] WARNING: Circuit files not found for %@", config.name);
+            NSLog(@"[Zkp2pGnarkModule] ERROR: Circuit files not found for %@", config.name);
             NSLog(@"  Looking for: %@ and %@", pkFilename, r1csFilename);
-            NSLog(@"  Bundle resource path: %@", [mainBundle resourcePath]);
             continue;
         }
         
-        NSLog(@"[Zkp2pGnarkModule] Found circuit files for %@:", config.name);
-        NSLog(@"  PK: %@", pkPath);
-        NSLog(@"  R1CS: %@", r1csPath);
         
         NSError *error;
         NSData *pkData = [NSData dataWithContentsOfFile:pkPath options:0 error:&error];
@@ -129,17 +123,11 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
         
         if (result == 1) {
             [self.initializedAlgorithms addObject:config.name];
-            NSLog(@"[Zkp2pGnarkModule] ✓ Initialized %@ (id: %lu)", config.name, (unsigned long)config.id);
         } else {
-            NSLog(@"[Zkp2pGnarkModule] ✗ Failed to initialize %@ (id: %lu)", config.name, (unsigned long)config.id);
-            NSLog(@"  Algorithm ID: %lu", (unsigned long)config.id);
-            NSLog(@"  PK size: %lu bytes", (unsigned long)[pkData length]);
-            NSLog(@"  R1CS size: %lu bytes", (unsigned long)[r1csData length]);
+            NSLog(@"[Zkp2pGnarkModule] ERROR: Failed to initialize %@ (id: %lu)", config.name, (unsigned long)config.id);
         }
     }
     
-    NSLog(@"[Zkp2pGnarkModule] Initialization complete. Available algorithms: %@", 
-          [[self.initializedAlgorithms allObjects] componentsJoinedByString:@", "]);
 }
 
 - (void)startObserving
@@ -187,9 +175,6 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @try {
             if ([functionName isEqualToString:@"groth16Prove"] && args.count > 0) {
-                NSLog(@"[Zkp2pGnarkModule] groth16Prove called");
-                NSLog(@"  Algorithm parameter: %@", algorithm);
-                NSLog(@"  Available algorithms: %@", [self.initializedAlgorithms allObjects]);
                 
                 // The witness comes as a JSON string
                 NSString *witnessJson = args[0];
@@ -216,8 +201,6 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                 witnessSlice.len = witnessLength;
                 witnessSlice.cap = witnessLength;
                 
-                NSLog(@"[Zkp2pGnarkModule] Calling Prove function...");
-                NSLog(@"[Zkp2pGnarkModule] Witness data length: %lu", (unsigned long)witnessLength);
                 
                 // Call the Prove function
                 struct Prove_return result = Prove(witnessSlice);
@@ -225,7 +208,6 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                 // Free our witness copy
                 free(witnessCopy);
                 
-                NSLog(@"[Zkp2pGnarkModule] Prove returned: r0=%p, r1=%lld", result.r0, result.r1);
                 
                 if (result.r0 && result.r1 > 0) {
                     // First create NSData to ensure bytes are copied before freeing
@@ -238,7 +220,6 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                     NSString *resultJson = [[NSString alloc] initWithData:resultData 
                                                                   encoding:NSUTF8StringEncoding];
                     
-                    NSLog(@"[Zkp2pGnarkModule] Prove result length: %lu", (unsigned long)[resultJson length]);
                     
                     // Parse JSON result
                     NSError *jsonError;
@@ -255,43 +236,7 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                         return;
                     }
                     
-                    NSLog(@"[Zkp2pGnarkModule] Success! Proof generated with keys: %@", [jsonDict allKeys]);
                     
-                    // Log detailed proof structure for debugging
-                    NSString *proofValue = jsonDict[@"proof"];
-                    NSString *publicSignalsValue = jsonDict[@"publicSignals"];
-                    NSLog(@"[Zkp2pGnarkModule] === PROOF DETAILS ===");
-                    NSLog(@"  Proof type: %@", NSStringFromClass([proofValue class]));
-                    NSLog(@"  Proof length: %lu", (unsigned long)[proofValue length]);
-                    NSLog(@"  Proof preview: %@", [proofValue substringToIndex:MIN(100, [proofValue length])]);
-                    NSLog(@"  PublicSignals type: %@", NSStringFromClass([publicSignalsValue class]));
-                    NSLog(@"  PublicSignals length: %lu", (unsigned long)[publicSignalsValue length]);
-                    NSLog(@"  PublicSignals preview: %@", [publicSignalsValue substringToIndex:MIN(100, [publicSignalsValue length])]);
-                    
-                    // Decode and examine the proof bytes
-                    NSData *proofData = [[NSData alloc] initWithBase64EncodedString:proofValue options:0];
-                    if (proofData) {
-                        NSLog(@"  Decoded proof length: %lu bytes", (unsigned long)[proofData length]);
-                        const uint8_t *bytes = (const uint8_t *)[proofData bytes];
-                        NSLog(@"  First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
-                              bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-                              bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
-                        
-                        // Check if it looks like it might be little-endian when it should be big-endian
-                        NSUInteger proofLen = [proofData length];
-                        if (proofLen >= 32) {
-                            NSLog(@"  Last 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
-                                  bytes[proofLen-16], bytes[proofLen-15], bytes[proofLen-14], bytes[proofLen-13],
-                                  bytes[proofLen-12], bytes[proofLen-11], bytes[proofLen-10], bytes[proofLen-9],
-                                  bytes[proofLen-8], bytes[proofLen-7], bytes[proofLen-6], bytes[proofLen-5],
-                                  bytes[proofLen-4], bytes[proofLen-3], bytes[proofLen-2], bytes[proofLen-1]);
-                        }
-                    }
-                    
-                    NSLog(@"[Zkp2pGnarkModule] ==================");
-                    
-                    // groth16Prove should return the proof and publicSignals as-is
-                    // The witness SDK will handle any further processing
                     [self sendResponse:requestId response:jsonDict error:nil];
                     resolve(nil);
                 } else {

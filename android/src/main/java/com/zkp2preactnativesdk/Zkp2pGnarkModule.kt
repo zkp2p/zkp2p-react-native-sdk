@@ -36,13 +36,8 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
 
         init {
             try {
-                // First load the gnarkprover library
                 System.loadLibrary("gnarkprover")
-                Log.i(NAME, "Successfully loaded gnarkprover native library.")
-                
-                // Then load our JNI bridge
                 System.loadLibrary("gnark_bridge")
-                Log.i(NAME, "Successfully loaded gnark_bridge native library.")
             } catch (e: UnsatisfiedLinkError) {
                 Log.e(
                     NAME,
@@ -56,14 +51,9 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
     }
 
     init {
-        Log.d(NAME, "[Zkp2pGnarkModule] Initialized")
-        
-        // Build algorithm ID map (matching iOS)
         for (config in ALGORITHM_CONFIGS) {
             algorithmIdMap[config.name] = config.id
         }
-        
-        // Initialize all algorithms on startup
         initializeAllAlgorithms()
     }
 
@@ -75,7 +65,6 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
     }
     
     private fun initializeAllAlgorithms() {
-        Log.d(NAME, "[Zkp2pGnarkModule] Initializing all algorithms...")
         
         for (config in ALGORITHM_CONFIGS) {
             try {
@@ -83,37 +72,25 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
                 val pkFilename = "pk.${config.fileExt}"
                 val r1csFilename = "r1cs.${config.fileExt}"
                 
-                Log.d(NAME, "[Zkp2pGnarkModule] Loading circuit files for ${config.name}:")
-                Log.d(NAME, "  Looking for: $pkFilename and $r1csFilename")
                 
                 // Read circuit files from assets
                 val pkData = readAssetFile(pkFilename)
                 val r1csData = readAssetFile(r1csFilename)
                 
                 if (pkData == null || r1csData == null) {
-                    Log.d(NAME, "[Zkp2pGnarkModule] WARNING: Circuit files not found for ${config.name}")
-                    Log.d(NAME, "  Looking for: $pkFilename and $r1csFilename")
+                    Log.e(NAME, "[Zkp2pGnarkModule] ERROR: Circuit files not found for ${config.name}")
                     continue
                 }
                 
-                Log.d(NAME, "[Zkp2pGnarkModule] Found circuit files for ${config.name}:")
-                Log.d(NAME, "  PK size: ${pkData.size} bytes")
-                Log.d(NAME, "  R1CS size: ${r1csData.size} bytes")
                 
                 // Initialize algorithm using native method
                 try {
-                    Log.d(NAME, "[Zkp2pGnarkModule] Calling nativeInitAlgorithm for ${config.name} (id: ${config.id})")
                     val result = nativeInitAlgorithm(config.id, pkData, r1csData)
-                    Log.d(NAME, "[Zkp2pGnarkModule] nativeInitAlgorithm returned: $result")
                     
                     if (result == 1) {
                         initializedAlgorithms.add(config.name)
-                        Log.d(NAME, "[Zkp2pGnarkModule] ✓ Initialized ${config.name} (id: ${config.id})")
                     } else {
-                        Log.e(NAME, "[Zkp2pGnarkModule] ✗ Failed to initialize ${config.name} (id: ${config.id})")
-                        Log.e(NAME, "  Algorithm ID: ${config.id}")
-                        Log.e(NAME, "  PK size: ${pkData.size} bytes")
-                        Log.e(NAME, "  R1CS size: ${r1csData.size} bytes")
+                        Log.e(NAME, "[Zkp2pGnarkModule] ERROR: Failed to initialize ${config.name} (id: ${config.id})")
                     }
                 } catch (e: Exception) {
                     Log.e(NAME, "[Zkp2pGnarkModule] Exception calling nativeInitAlgorithm for ${config.name}", e)
@@ -128,34 +105,17 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
             }
         }
         
-        Log.d(NAME, "[Zkp2pGnarkModule] Initialization complete. Available algorithms: ${initializedAlgorithms.joinToString(", ")}")
     }
     
     private fun readAssetFile(filename: String): ByteArray? {
         return try {
-            // Look for files in gnark-circuits folder (matching iOS bundle structure)
             val assetPath = "gnark-circuits/$filename"
-            Log.d(NAME, "[Zkp2pGnarkModule] Reading asset: $assetPath")
             reactApplicationContext.assets.open(assetPath).use { inputStream ->
                 inputStream.readBytes()
             }
         } catch (e: Exception) {
             Log.e(NAME, "[Zkp2pGnarkModule] Failed to read asset file: $filename", e)
             
-            // List available assets for debugging
-            try {
-                Log.e(NAME, "[Zkp2pGnarkModule] Available assets in gnark-circuits:")
-                val assets = reactApplicationContext.assets.list("gnark-circuits")
-                if (assets != null && assets.isNotEmpty()) {
-                    assets.forEach { asset ->
-                        Log.e(NAME, "  - $asset")
-                    }
-                } else {
-                    Log.e(NAME, "  (directory is empty or doesn't exist)")
-                }
-            } catch (listError: Exception) {
-                Log.e(NAME, "[Zkp2pGnarkModule] Could not list assets: ${listError.message}")
-            }
             
             null
         }

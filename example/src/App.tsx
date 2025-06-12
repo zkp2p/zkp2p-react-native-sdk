@@ -147,7 +147,7 @@ export default function App() {
           : 'http://localhost:8080/' // iOS/web
       }
       rpcTimeout={60000}
-      prover="reclaim_gnark"
+      prover="reclaim_snarkjs"
     >
       <AppContent />
     </Zkp2pProvider>

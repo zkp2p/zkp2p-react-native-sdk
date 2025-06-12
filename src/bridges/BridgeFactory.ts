@@ -19,32 +19,11 @@ class BridgeFactoryImpl {
 
     const gnarkModule = nativeModuleService.getGnarkModule();
     if (!gnarkModule) {
-      console.warn(
-        '[BridgeFactory] Cannot create GnarkBridge - native module not available'
-      );
       return null;
     }
 
     try {
       this.gnarkBridgeInstance = new GnarkBridge(gnarkModule);
-
-      // Debug: Log available methods
-      console.log('[BridgeFactory] GnarkBridge created successfully');
-
-      // Verify methods exist
-      const methods = Object.getOwnPropertyNames(
-        Object.getPrototypeOf(this.gnarkBridgeInstance)
-      ).filter(
-        (name) => typeof (this.gnarkBridgeInstance as any)[name] === 'function'
-      );
-      console.log('[BridgeFactory] Available methods:', methods);
-
-      // Specifically check for our key methods
-      console.log('[BridgeFactory] Method check:');
-      console.log('  - prove exists:', 'prove' in this.gnarkBridgeInstance);
-      console.log('  - verify exists:', 'verify' in this.gnarkBridgeInstance);
-      console.log('  - dispose exists:', 'dispose' in this.gnarkBridgeInstance);
-
       return this.gnarkBridgeInstance;
     } catch (error) {
       console.error('[BridgeFactory] Failed to create GnarkBridge:', error);

@@ -11,7 +11,6 @@ import type {
 import type { Zkp2pClient } from '../client';
 
 export interface Zkp2pValues {
-  /* auth */
   provider: ProviderSettings | null;
   flowState: FlowState;
   authError: Error | null;
@@ -25,8 +24,6 @@ export interface Zkp2pValues {
   authenticate?: () => Promise<void>;
   authWebViewProps: React.ComponentProps<typeof InterceptWebView> | null;
   closeAuthWebView?: () => void;
-
-  /* proof */
   generateProof?: (
     providerCfg: ProviderSettings,
     payload: NetworkEvent,
@@ -34,8 +31,6 @@ export interface Zkp2pValues {
     itemIndex?: number
   ) => Promise<any>;
   proofData: ProofData | null;
-
-  /* client */
   zkp2pClient: Zkp2pClient | null;
 }
 

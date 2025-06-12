@@ -16,17 +16,14 @@ class Zkp2pReactNativeSdkModule(reactContext: ReactApplicationContext) :
   }
 
   override fun startAuthentication(provider: ReadableMap, promise: Promise) {
-    println("Native: startAuthentication called with provider: " + provider.toString())
     promise.resolve(null)
   }
 
   override fun handleSuccess(provider: ReadableMap, promise: Promise) {
-    println("Native: handleSuccess called with provider: " + provider.toString())
     promise.resolve(null)
   }
 
   override fun handleError(errorMessage: String, promise: Promise) {
-    println("Native: handleError called with errorMessage: " + errorMessage)
     promise.resolve(null)
   }
 
@@ -37,13 +34,11 @@ class Zkp2pReactNativeSdkModule(reactContext: ReactApplicationContext) :
     intentHash: String,
     promise: Promise
   ) {
-    println("Native: generateProof called with intentHash: " + intentHash)
     val result = WritableNativeMap()
     promise.resolve(result)
   }
 
   override fun handleIntercept(event: ReadableMap, promise: Promise) {
-    println("Native: handleIntercept called with event: " + event.toString())
     promise.resolve(null)
   }
 
@@ -52,7 +47,6 @@ class Zkp2pReactNativeSdkModule(reactContext: ReactApplicationContext) :
     jsonResponseBody: String,
     promise: Promise
   ) {
-    println("Native: extractTransactionsData called with jsonResponseBody: " + jsonResponseBody)
     val result = WritableNativeArray()
     promise.resolve(result)
   }

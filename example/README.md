@@ -9,14 +9,14 @@ This example app demonstrates the usage of the ZKP2P React Native SDK, showcasin
    - Authentication flow
    - Stored authentication handling
 
-2. **Transaction Extraction**
-   - Extracting transactions from intercepted payloads
-   - Transaction selection for proof generation
-
-3. **Proof Generation**
+2. **Proof Generation**
    - RPC communication
    - Proof generation with selected transaction
    - Error handling and loading states
+
+3. **API**
+   - Interacting with the ZKP2P API
+   - Interacting with the ZKP2P Smart Contracts
 
 ## Setup
 

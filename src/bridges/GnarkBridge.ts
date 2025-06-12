@@ -16,8 +16,6 @@ export class GnarkBridge {
   private nativeModule: GnarkModuleSpec;
 
   constructor(nativeModule: GnarkModuleSpec) {
-    console.log('[GnarkBridge] Initializing with provided native module');
-
     if (!nativeModule) {
       throw new Error(
         '[GnarkBridge] Native module not provided. Make sure the native module is available.'
@@ -25,7 +23,6 @@ export class GnarkBridge {
     }
 
     this.nativeModule = nativeModule;
-    console.log('[GnarkBridge] Native module loaded successfully');
 
     // Create event emitter with the native module
     this.eventEmitter = new NativeEventEmitter(nativeModule as any);
@@ -61,10 +58,6 @@ export class GnarkBridge {
         }
       });
 
-      console.log('[GnarkBridge] Proving with algorithm:', algorithm);
-      console.log('[GnarkBridge] Witness:', witness);
-
-      // Call native method with algorithm parameter
       this.nativeModule
         .executeZkFunction(requestId, 'groth16Prove', [witness], algorithm)
         .catch((err: Error) => {

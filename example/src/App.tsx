@@ -140,14 +140,14 @@ export default function App() {
       walletClient={ephemeralWalletClient as any}
       apiKey={ZKP2P_API_KEY}
       chainId={31337}
-      // witnessUrl="http://localhost:8001/"
+      witnessUrl="https://witness-proxy-dev.zkp2p.xyz"
       configBaseUrl={
         Platform.OS === 'android'
           ? 'http://10.0.2.2:8080/' // Android emulator host
           : 'http://localhost:8080/' // iOS/web
       }
-      rpcTimeout={180000}
-      prover="reclaim_gnark"
+      rpcTimeout={60000}
+      prover="reclaim_snarkjs"
     >
       <AppContent />
     </Zkp2pProvider>

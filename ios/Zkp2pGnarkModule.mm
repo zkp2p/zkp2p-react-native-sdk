@@ -53,7 +53,6 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
 - (instancetype)init
 {
     if (self = [super init]) {
-        NSLog(@"[Zkp2pGnarkModule] Initialized");
         self.initializedAlgorithms = [NSMutableSet set];
         self.algorithmIdMap = [NSMutableDictionary dictionary];
         
@@ -74,7 +73,6 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
 
 - (void)initializeAllAlgorithms
 {
-    NSLog(@"[Zkp2pGnarkModule] Initializing all algorithms...");
     
     NSBundle *mainBundle = [NSBundle mainBundle];
     
@@ -90,15 +88,11 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
         NSString *r1csPath = [mainBundle pathForResource:r1csFilename ofType:nil];
         
         if (!pkPath || !r1csPath) {
-            NSLog(@"[Zkp2pGnarkModule] WARNING: Circuit files not found for %@", config.name);
+            NSLog(@"[Zkp2pGnarkModule] ERROR: Circuit files not found for %@", config.name);
             NSLog(@"  Looking for: %@ and %@", pkFilename, r1csFilename);
-            NSLog(@"  Bundle resource path: %@", [mainBundle resourcePath]);
             continue;
         }
         
-        NSLog(@"[Zkp2pGnarkModule] Found circuit files for %@:", config.name);
-        NSLog(@"  PK: %@", pkPath);
-        NSLog(@"  R1CS: %@", r1csPath);
         
         NSError *error;
         NSData *pkData = [NSData dataWithContentsOfFile:pkPath options:0 error:&error];
@@ -129,17 +123,11 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
         
         if (result == 1) {
             [self.initializedAlgorithms addObject:config.name];
-            NSLog(@"[Zkp2pGnarkModule] ✓ Initialized %@ (id: %lu)", config.name, (unsigned long)config.id);
         } else {
-            NSLog(@"[Zkp2pGnarkModule] ✗ Failed to initialize %@ (id: %lu)", config.name, (unsigned long)config.id);
-            NSLog(@"  Algorithm ID: %lu", (unsigned long)config.id);
-            NSLog(@"  PK size: %lu bytes", (unsigned long)[pkData length]);
-            NSLog(@"  R1CS size: %lu bytes", (unsigned long)[r1csData length]);
+            NSLog(@"[Zkp2pGnarkModule] ERROR: Failed to initialize %@ (id: %lu)", config.name, (unsigned long)config.id);
         }
     }
     
-    NSLog(@"[Zkp2pGnarkModule] Initialization complete. Available algorithms: %@", 
-          [[self.initializedAlgorithms allObjects] componentsJoinedByString:@", "]);
 }
 
 - (void)startObserving
@@ -187,9 +175,6 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @try {
             if ([functionName isEqualToString:@"groth16Prove"] && args.count > 0) {
-                NSLog(@"[Zkp2pGnarkModule] groth16Prove called");
-                NSLog(@"  Algorithm parameter: %@", algorithm);
-                NSLog(@"  Available algorithms: %@", [self.initializedAlgorithms allObjects]);
                 
                 // The witness comes as a JSON string
                 NSString *witnessJson = args[0];
@@ -202,39 +187,39 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                     return;
                 }
                 
-                // Log witness preview
-                NSString *witnessPreview = witnessJson;
-                if ([witnessJson length] > 200) {
-                    witnessPreview = [[witnessJson substringToIndex:200] stringByAppendingString:@"..."];
-                }
-                NSLog(@"[Zkp2pGnarkModule] Witness preview: %@", witnessPreview);
-                
                 // Convert to data for gnark
                 NSData *witnessData = [witnessJson dataUsingEncoding:NSUTF8StringEncoding];
                 
-                // Create GoSlice from witness data
-                GoSlice witnessSlice;
-                witnessSlice.data = (void *)[witnessData bytes];
-                witnessSlice.len = [witnessData length];
-                witnessSlice.cap = [witnessData length];
+                // Create a copy of the bytes to ensure they remain valid during the Go call
+                NSUInteger witnessLength = [witnessData length];
+                void *witnessCopy = malloc(witnessLength);
+                memcpy(witnessCopy, [witnessData bytes], witnessLength);
                 
-                NSLog(@"[Zkp2pGnarkModule] Calling Prove function...");
+                // Create GoSlice from copied data
+                GoSlice witnessSlice;
+                witnessSlice.data = witnessCopy;
+                witnessSlice.len = witnessLength;
+                witnessSlice.cap = witnessLength;
+                
                 
                 // Call the Prove function
                 struct Prove_return result = Prove(witnessSlice);
                 
-                NSLog(@"[Zkp2pGnarkModule] Prove returned: r0=%p, r1=%lld", result.r0, result.r1);
+                // Free our witness copy
+                free(witnessCopy);
+                
                 
                 if (result.r0 && result.r1 > 0) {
-                    // Convert result to string
-                    NSString *resultJson = [[NSString alloc] initWithBytes:result.r0 
-                                                                    length:result.r1 
+                    // First create NSData to ensure bytes are copied before freeing
+                    NSData *resultData = [NSData dataWithBytes:result.r0 length:(NSUInteger)result.r1];
+                    
+                    // Free the memory allocated by Go immediately after copying
+                    Free(result.r0);
+                    
+                    // Now convert to string from our copied data
+                    NSString *resultJson = [[NSString alloc] initWithData:resultData 
                                                                   encoding:NSUTF8StringEncoding];
                     
-                    NSLog(@"[Zkp2pGnarkModule] Prove result length: %lu", (unsigned long)[resultJson length]);
-                    
-                    // Free the memory allocated by Go
-                    Free(result.r0);
                     
                     // Parse JSON result
                     NSError *jsonError;
@@ -251,9 +236,7 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                         return;
                     }
                     
-                    NSLog(@"[Zkp2pGnarkModule] Success! Proof generated with keys: %@", [jsonDict allKeys]);
                     
-                    // The response format should match what the RPC system expects
                     [self sendResponse:requestId response:jsonDict error:nil];
                     resolve(nil);
                 } else {
@@ -262,12 +245,6 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                     [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
                     reject(@"PROVE_ERROR", errorMsg, nil);
                 }
-                
-            } else if ([functionName isEqualToString:@"groth16Verify"]) {
-                // Verification is server-side according to the README
-                NSString *errorMsg = @"Verification is not implemented on the client";
-                [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
-                reject(@"NOT_IMPLEMENTED", errorMsg, nil);
                 
             } else {
                 NSString *errorMsg = [NSString stringWithFormat:@"Unknown function: %@", functionName];

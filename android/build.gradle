@@ -67,6 +67,16 @@ android {
   defaultConfig {
     minSdkVersion getExtOrIntegerDefault("minSdkVersion")
     targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
+    
+    ndk {
+      abiFilters "arm64-v8a", "x86_64"
+    }
+    
+    externalNativeBuild {
+      ndkBuild {
+        arguments "NDK_DEBUG=1"
+      }
+    }
   }
 
   buildFeatures {
@@ -101,6 +111,12 @@ android {
       }
     }
   }
+  
+  externalNativeBuild {
+    ndkBuild {
+      path "src/main/jni/Android.mk"
+    }
+  }
 }
 
 repositories {
@@ -119,14 +135,40 @@ dependencies {
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4"
 }
 
-// Task to copy gnark-circuits to assets
+// NOTE: Circuit files need to be copied to the app's assets, not the library's assets
+// This task is for development/testing purposes only
+// Apps using this library should copy the gnark-circuits files to their own assets
 task copyGnarkCircuits(type: Copy) {
-  from "${rootDir}/../gnark-circuits"
-  into "src/main/assets/gnark-circuits"
-  include "*.aes128", "*.aes256", "*.chacha20"
+  from file("${project.rootDir}/../gnark-circuits")
+  into file("${projectDir}/src/main/assets/gnark-circuits")
+  include "pk.*", "r1cs.*"
+  doFirst {
+    println "Copying gnark-circuits from ${project.rootDir}/../gnark-circuits to ${projectDir}/src/main/assets/gnark-circuits"
+    println "Source exists: ${file("${project.rootDir}/../gnark-circuits").exists()}"
+    println "Source files: ${file("${project.rootDir}/../gnark-circuits").listFiles()?.collect { it.name }}"
+  }
+  doLast {
+    println "Copied files:"
+    fileTree("${projectDir}/src/main/assets/gnark-circuits").each { file ->
+      println "  - ${file.name}"
+    }
+  }
 }
 
+// Ensure the assets directory exists
+task createAssetsDir {
+  doLast {
+    file("src/main/assets/gnark-circuits").mkdirs()
+  }
+}
+
+copyGnarkCircuits.dependsOn createAssetsDir
 preBuild.dependsOn copyGnarkCircuits
+
+// Clean circuit files on clean
+clean.doFirst {
+  delete "src/main/assets/gnark-circuits"
+}
 
 if (isNewArchitectureEnabled()) {
   react {

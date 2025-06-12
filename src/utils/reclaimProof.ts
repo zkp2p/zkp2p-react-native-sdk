@@ -56,11 +56,6 @@ export const encodeProofAndPaymentMethodAsBytes = (
   proof: ReclaimProof,
   paymentMethod: number
 ) => {
-  console.log(
-    'encoding proof and payment method as bytes',
-    proof,
-    paymentMethod
-  );
   return ethers.utils.defaultAbiCoder.encode(
     [PROOF_ENCODING_STRING, 'uint8'],
     [proof, paymentMethod]

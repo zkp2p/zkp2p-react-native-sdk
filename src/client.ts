@@ -205,7 +205,7 @@ export class Zkp2pClient {
       }
       return rawDepositViews.map(parseEscrowDepositView);
     } catch (error) {
-      console.error('Error fetching account deposit views:', error);
+      console.error('[zkp2p] Error fetching account deposits:', error);
       throw error;
     }
   }
@@ -236,8 +236,8 @@ export class Zkp2pClient {
       }
       return parseEscrowIntentView(rawIntentViews);
     } catch (error) {
-      console.error('Error fetching intent views:', error);
-      throw error; // Re-throw or handle more gracefully
+      console.error('[zkp2p] Error fetching account intent:', error);
+      throw error;
     }
   }
 }

@@ -7,23 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		068A7FAA6967328266872EE2 /* libPods-Zkp2pReactNativeSdkExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 12F0F84482FFA9564EAA49C5 /* libPods-Zkp2pReactNativeSdkExample.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		360DE99B64281B2DF99C96C2 /* libPods-Zkp2pReactNativeSdkExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A4BDB6142D0B502A9404377A /* libPods-Zkp2pReactNativeSdkExample.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		DF3E12BCEC29AB72B98BFAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		12F0F84482FFA9564EAA49C5 /* libPods-Zkp2pReactNativeSdkExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Zkp2pReactNativeSdkExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07F961A680F5B00A75B9A /* Zkp2pReactNativeSdkExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zkp2pReactNativeSdkExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Zkp2pReactNativeSdkExample/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Zkp2pReactNativeSdkExample/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = Zkp2pReactNativeSdkExample/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		220C286F8B0ED5521AAC4504 /* Pods-Zkp2pReactNativeSdkExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zkp2pReactNativeSdkExample.debug.xcconfig"; path = "Target Support Files/Pods-Zkp2pReactNativeSdkExample/Pods-Zkp2pReactNativeSdkExample.debug.xcconfig"; sourceTree = "<group>"; };
+		73DA935A7A3390549E43853A /* Pods-Zkp2pReactNativeSdkExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zkp2pReactNativeSdkExample.debug.xcconfig"; path = "Target Support Files/Pods-Zkp2pReactNativeSdkExample/Pods-Zkp2pReactNativeSdkExample.debug.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Zkp2pReactNativeSdkExample/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Zkp2pReactNativeSdkExample/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		CCA55A397C7002E1B5475688 /* Pods-Zkp2pReactNativeSdkExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zkp2pReactNativeSdkExample.release.xcconfig"; path = "Target Support Files/Pods-Zkp2pReactNativeSdkExample/Pods-Zkp2pReactNativeSdkExample.release.xcconfig"; sourceTree = "<group>"; };
+		A4BDB6142D0B502A9404377A /* libPods-Zkp2pReactNativeSdkExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Zkp2pReactNativeSdkExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9557C162C02893F65879F2D /* Pods-Zkp2pReactNativeSdkExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zkp2pReactNativeSdkExample.release.xcconfig"; path = "Target Support Files/Pods-Zkp2pReactNativeSdkExample/Pods-Zkp2pReactNativeSdkExample.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -32,7 +32,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				068A7FAA6967328266872EE2 /* libPods-Zkp2pReactNativeSdkExample.a in Frameworks */,
+				360DE99B64281B2DF99C96C2 /* libPods-Zkp2pReactNativeSdkExample.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,7 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				12F0F84482FFA9564EAA49C5 /* libPods-Zkp2pReactNativeSdkExample.a */,
+				A4BDB6142D0B502A9404377A /* libPods-Zkp2pReactNativeSdkExample.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -92,8 +92,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				220C286F8B0ED5521AAC4504 /* Pods-Zkp2pReactNativeSdkExample.debug.xcconfig */,
-				CCA55A397C7002E1B5475688 /* Pods-Zkp2pReactNativeSdkExample.release.xcconfig */,
+				73DA935A7A3390549E43853A /* Pods-Zkp2pReactNativeSdkExample.debug.xcconfig */,
+				C9557C162C02893F65879F2D /* Pods-Zkp2pReactNativeSdkExample.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -105,13 +105,13 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Zkp2pReactNativeSdkExample" */;
 			buildPhases = (
-				659ACC097BA4E984D9577657 /* [CP] Check Pods Manifest.lock */,
+				99AE6BEB2405F14D63398D63 /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				10F59562A8F7CFD1AD4F4963 /* [CP] Embed Pods Frameworks */,
-				1757C9F255F62839406D4098 /* [CP] Copy Pods Resources */,
+				383A5DA612A8318D0BF8AE7A /* [CP] Embed Pods Frameworks */,
+				79E73139537E8DC06BBADEA5 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -183,7 +183,7 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"$WITH_ENVIRONMENT $REACT_NATIVE_XCODE\"\n";
 		};
-		10F59562A8F7CFD1AD4F4963 /* [CP] Embed Pods Frameworks */ = {
+		383A5DA612A8318D0BF8AE7A /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -200,7 +200,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Zkp2pReactNativeSdkExample/Pods-Zkp2pReactNativeSdkExample-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		1757C9F255F62839406D4098 /* [CP] Copy Pods Resources */ = {
+		79E73139537E8DC06BBADEA5 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -217,7 +217,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Zkp2pReactNativeSdkExample/Pods-Zkp2pReactNativeSdkExample-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		659ACC097BA4E984D9577657 /* [CP] Check Pods Manifest.lock */ = {
+		99AE6BEB2405F14D63398D63 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -255,7 +255,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 220C286F8B0ED5521AAC4504 /* Pods-Zkp2pReactNativeSdkExample.debug.xcconfig */;
+			baseConfigurationReference = 73DA935A7A3390549E43853A /* Pods-Zkp2pReactNativeSdkExample.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -283,7 +283,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = CCA55A397C7002E1B5475688 /* Pods-Zkp2pReactNativeSdkExample.release.xcconfig */;
+			baseConfigurationReference = C9557C162C02893F65879F2D /* Pods-Zkp2pReactNativeSdkExample.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

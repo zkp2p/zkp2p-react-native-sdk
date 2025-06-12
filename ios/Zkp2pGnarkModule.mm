@@ -202,39 +202,43 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                     return;
                 }
                 
-                // Log witness preview
-                NSString *witnessPreview = witnessJson;
-                if ([witnessJson length] > 200) {
-                    witnessPreview = [[witnessJson substringToIndex:200] stringByAppendingString:@"..."];
-                }
-                NSLog(@"[Zkp2pGnarkModule] Witness preview: %@", witnessPreview);
-                
                 // Convert to data for gnark
                 NSData *witnessData = [witnessJson dataUsingEncoding:NSUTF8StringEncoding];
                 
-                // Create GoSlice from witness data
+                // Create a copy of the bytes to ensure they remain valid during the Go call
+                NSUInteger witnessLength = [witnessData length];
+                void *witnessCopy = malloc(witnessLength);
+                memcpy(witnessCopy, [witnessData bytes], witnessLength);
+                
+                // Create GoSlice from copied data
                 GoSlice witnessSlice;
-                witnessSlice.data = (void *)[witnessData bytes];
-                witnessSlice.len = [witnessData length];
-                witnessSlice.cap = [witnessData length];
+                witnessSlice.data = witnessCopy;
+                witnessSlice.len = witnessLength;
+                witnessSlice.cap = witnessLength;
                 
                 NSLog(@"[Zkp2pGnarkModule] Calling Prove function...");
+                NSLog(@"[Zkp2pGnarkModule] Witness data length: %lu", (unsigned long)witnessLength);
                 
                 // Call the Prove function
                 struct Prove_return result = Prove(witnessSlice);
                 
+                // Free our witness copy
+                free(witnessCopy);
+                
                 NSLog(@"[Zkp2pGnarkModule] Prove returned: r0=%p, r1=%lld", result.r0, result.r1);
                 
                 if (result.r0 && result.r1 > 0) {
-                    // Convert result to string
-                    NSString *resultJson = [[NSString alloc] initWithBytes:result.r0 
-                                                                    length:result.r1 
+                    // First create NSData to ensure bytes are copied before freeing
+                    NSData *resultData = [NSData dataWithBytes:result.r0 length:(NSUInteger)result.r1];
+                    
+                    // Free the memory allocated by Go immediately after copying
+                    Free(result.r0);
+                    
+                    // Now convert to string from our copied data
+                    NSString *resultJson = [[NSString alloc] initWithData:resultData 
                                                                   encoding:NSUTF8StringEncoding];
                     
                     NSLog(@"[Zkp2pGnarkModule] Prove result length: %lu", (unsigned long)[resultJson length]);
-                    
-                    // Free the memory allocated by Go
-                    Free(result.r0);
                     
                     // Parse JSON result
                     NSError *jsonError;
@@ -253,7 +257,41 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                     
                     NSLog(@"[Zkp2pGnarkModule] Success! Proof generated with keys: %@", [jsonDict allKeys]);
                     
-                    // The response format should match what the RPC system expects
+                    // Log detailed proof structure for debugging
+                    NSString *proofValue = jsonDict[@"proof"];
+                    NSString *publicSignalsValue = jsonDict[@"publicSignals"];
+                    NSLog(@"[Zkp2pGnarkModule] === PROOF DETAILS ===");
+                    NSLog(@"  Proof type: %@", NSStringFromClass([proofValue class]));
+                    NSLog(@"  Proof length: %lu", (unsigned long)[proofValue length]);
+                    NSLog(@"  Proof preview: %@", [proofValue substringToIndex:MIN(100, [proofValue length])]);
+                    NSLog(@"  PublicSignals type: %@", NSStringFromClass([publicSignalsValue class]));
+                    NSLog(@"  PublicSignals length: %lu", (unsigned long)[publicSignalsValue length]);
+                    NSLog(@"  PublicSignals preview: %@", [publicSignalsValue substringToIndex:MIN(100, [publicSignalsValue length])]);
+                    
+                    // Decode and examine the proof bytes
+                    NSData *proofData = [[NSData alloc] initWithBase64EncodedString:proofValue options:0];
+                    if (proofData) {
+                        NSLog(@"  Decoded proof length: %lu bytes", (unsigned long)[proofData length]);
+                        const uint8_t *bytes = (const uint8_t *)[proofData bytes];
+                        NSLog(@"  First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+                              bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                              bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
+                        
+                        // Check if it looks like it might be little-endian when it should be big-endian
+                        NSUInteger proofLen = [proofData length];
+                        if (proofLen >= 32) {
+                            NSLog(@"  Last 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+                                  bytes[proofLen-16], bytes[proofLen-15], bytes[proofLen-14], bytes[proofLen-13],
+                                  bytes[proofLen-12], bytes[proofLen-11], bytes[proofLen-10], bytes[proofLen-9],
+                                  bytes[proofLen-8], bytes[proofLen-7], bytes[proofLen-6], bytes[proofLen-5],
+                                  bytes[proofLen-4], bytes[proofLen-3], bytes[proofLen-2], bytes[proofLen-1]);
+                        }
+                    }
+                    
+                    NSLog(@"[Zkp2pGnarkModule] ==================");
+                    
+                    // groth16Prove should return the proof and publicSignals as-is
+                    // The witness SDK will handle any further processing
                     [self sendResponse:requestId response:jsonDict error:nil];
                     resolve(nil);
                 } else {
@@ -262,12 +300,6 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                     [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
                     reject(@"PROVE_ERROR", errorMsg, nil);
                 }
-                
-            } else if ([functionName isEqualToString:@"groth16Verify"]) {
-                // Verification is server-side according to the README
-                NSString *errorMsg = @"Verification is not implemented on the client";
-                [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
-                reject(@"NOT_IMPLEMENTED", errorMsg, nil);
                 
             } else {
                 NSString *errorMsg = [NSString stringWithFormat:@"Unknown function: %@", functionName];

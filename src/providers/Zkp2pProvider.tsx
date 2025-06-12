@@ -624,8 +624,18 @@ const Zkp2pProvider = ({
 
       const promise = new Promise<RPCResponse>((resolve, reject) => {
         const timeout = setTimeout(() => {
+          console.error('[Zkp2pProvider] RPC timeout exceeded:', {
+            id,
+            type,
+            rpcTimeout: rpcTimeout / 1000 + 's',
+            request: req,
+          });
           delete pending.current[id];
-          reject(new Error('RPC timeout'));
+          reject(
+            new Error(
+              `RPC timeout after ${rpcTimeout / 1000}s. The witness server may be unresponsive or the proof generation is taking too long.`
+            )
+          );
         }, rpcTimeout);
 
         pending.current[id] = { resolve, reject, timeout, onStep };
@@ -637,7 +647,10 @@ const Zkp2pProvider = ({
       if (!rpcWebViewRef.current) {
         console.error('[Zkp2pProvider] RPC WebView ref is null!');
       } else {
-        rpcWebViewRef.current.postMessage(JSON.stringify(msg));
+        console.log('Sending RPC message:', msg);
+        rpcWebViewRef.current.injectJavaScript(`
+          window.postMessage(${JSON.stringify(msg)});
+        `);
       }
       return promise;
     },
@@ -659,18 +672,52 @@ const Zkp2pProvider = ({
 
       if (type === 'createClaimStep') {
         console.log('Proof generation step:', data.step);
-        // Here you could also call pending.current[id]?.onStep if you need to.
+        // Log more details about the step
+        if (data.step?.name === 'waiting-for-verification') {
+          console.log('[Zkp2pProvider] Waiting for verification...', data);
+        }
+        // Call onStep callback if provided
+        if (pending.current[id]?.onStep) {
+          pending.current[id].onStep(data as RPCResponse);
+        }
       } else if (type === 'createClaimDone') {
         pending.current[id]?.resolve(data as RPCResponse);
         clearTimeout(pending.current[id]?.timeout);
         delete pending.current[id];
       } else if (type === 'error') {
-        const error = new Error(
-          (data as any).error?.data.message || 'Unknown error'
-        );
-        if ((data as any).error?.data.stack) {
+        // Log the full error data for debugging
+        console.error('[Zkp2pProvider] RPC error received:', {
+          id,
+          type,
+          rawData: data,
+          error: (data as any).error,
+          fullMessage: JSON.stringify(data, null, 2),
+        });
+
+        let errorMessage = 'Unknown error';
+        let errorDetails = '';
+
+        // Try different ways to extract error information
+        if ((data as any).error?.data?.message) {
+          errorMessage = (data as any).error.data.message;
+        } else if ((data as any).error?.message) {
+          errorMessage = (data as any).error.message;
+        } else if ((data as any).message) {
+          errorMessage = (data as any).message;
+        } else if ((data as any).error) {
+          // If error exists but has unexpected structure, stringify it
+          errorDetails = JSON.stringify((data as any).error);
+          errorMessage = `RPC Error: ${errorDetails}`;
+        }
+
+        const error = new Error(errorMessage);
+        if ((data as any).error?.data?.stack) {
           error.stack = (data as any).error.data.stack;
         }
+
+        // Add raw error data to the error object for debugging
+        (error as any).rawData = data;
+
         pending.current[id]?.reject(error);
         clearTimeout(pending.current[id]?.timeout);
         delete pending.current[id];
@@ -783,7 +830,12 @@ const Zkp2pProvider = ({
           zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
         };
         console.log('RPC request:', rpc);
-        const res = await rpcRequest('createClaim', rpc);
+        const res = await rpcRequest('createClaim', rpc, (stepData) => {
+          console.log('[zkp2p] Proof generation progress:', stepData.step);
+          if (stepData.step?.error) {
+            console.error('[zkp2p] Step error:', stepData.step.error);
+          }
+        });
         console.log('RPC response:', res);
 
         // only reclaim proofs are supported at the moment

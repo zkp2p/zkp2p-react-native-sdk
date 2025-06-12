@@ -31,10 +31,20 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
           const data = JSON.parse(event.nativeEvent.data);
 
           if (data.type === 'console') {
-            console.log(
-              `[WebView Console.${data.level}]`,
-              ...(data.data || [])
-            );
+            // Enhanced logging for console errors
+            if (data.level === 'error' || data.level === 50) {
+              console.error(
+                `[WebView Console.error]`,
+                ...(data.data || []),
+                '\nFull data:',
+                JSON.stringify(data, null, 2)
+              );
+            } else {
+              console.log(
+                `[WebView Console.${data.level}]`,
+                ...(data.data || [])
+              );
+            }
             return;
           }
 
@@ -46,13 +56,11 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
 
             try {
               const { fn, args } = data.request;
-              const algorithm = data.request.algorithm || 'aes-256-ctr';
               let result: any;
 
               switch (fn) {
                 case 'groth16Prove': {
                   let witness = args[0];
-                  console.log('[RPCWebView] Algorithm:', algorithm);
 
                   // Check if witness is in RPC wrapper format and decode it
                   if (
@@ -62,18 +70,24 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
                   ) {
                     console.log('[RPCWebView] Decoding RPC wrapper format...');
                     // Decode base64 to get the actual witness JSON
-                    witness = atob(witness.value);
+                    console.log('[RPCWebView] Decoding base64...');
+                    console.log('[RPCWebView] Witness:', witness);
                   }
 
-                  console.log(
-                    '[RPCWebView] Witness preview:',
-                    witness.substring(0, 200)
-                  );
                   console.log('[RPCWebView] Calling native gnarkBridge.prove');
+                  console.log('[RPCWebView] Witness wrapper:', witness);
+
+                  // Decode the witness from the wrapper
+                  const decodedWitness = atob(witness.value);
+                  const witnessObj = JSON.parse(decodedWitness);
+                  const cipherParsed = witnessObj.cipher;
+
+                  console.log('[RPCWebView] Decoded witness:', decodedWitness);
+                  console.log('[RPCWebView] Cipher:', cipherParsed);
 
                   const proofResult = await gnarkBridge.prove(
-                    witness,
-                    algorithm
+                    decodedWitness, // Pass the decoded JSON string
+                    cipherParsed
                   );
                   console.log('[RPCWebView] Proof result:', proofResult);
 
@@ -90,19 +104,66 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
                   );
               }
 
-              const response = {
-                id: data.id,
+              // Ensure we have all required fields
+              if (!result || !result.proof || !result.publicSignals) {
+                throw new Error(
+                  `Invalid proof result: ${JSON.stringify(result)}`
+                );
+              }
+
+              // Log the exact proof that server will receive
+              console.log('[RPCWebView] EXACT PROOF STRING:');
+              console.log(result.proof);
+              console.log('[RPCWebView] EXACT PUBLIC SIGNALS STRING:');
+              console.log(result.publicSignals);
+
+              // Convert base64 strings to the expected format
+              const responseForServer = {
+                id: data.id || '',
                 module: data.module || 'attestor-core',
                 type: 'executeZkFunctionV3Done',
                 isResponse: true,
-                response: result,
+                response: {
+                  proof: result.proof,
+                  publicSignals: result.publicSignals,
+                },
               };
 
               console.log(
-                '[RPCWebView] Sending ZK success response:',
-                response
+                '[RPCWebView] Response for server:',
+                responseForServer
               );
-              internalWebViewRef.current?.postMessage(JSON.stringify(response));
+              // Additional logging to debug the format
+              console.log('[RPCWebView] Base64 validation:', {
+                proofIsValidBase64: /^[A-Za-z0-9+/]*={0,2}$/.test(result.proof),
+                publicSignalsIsValidBase64: /^[A-Za-z0-9+/]*={0,2}$/.test(
+                  result.publicSignals
+                ),
+                proofModulo4: result.proof.length % 4,
+                publicSignalsModulo4: result.publicSignals.length % 4,
+              });
+
+              try {
+                const jsonString = JSON.stringify(responseForServer);
+                console.log(
+                  '[RPCWebView] JSON string length:',
+                  jsonString.length
+                );
+                console.log(
+                  '[RPCWebView] JSON preview:',
+                  jsonString.substring(0, 200) + '...'
+                );
+
+                internalWebViewRef.current?.injectJavaScript(
+                  `window.postMessage(${jsonString});`
+                );
+              } catch (stringifyError) {
+                console.error(
+                  '[RPCWebView] JSON.stringify error:',
+                  stringifyError
+                );
+                throw stringifyError;
+              }
             } catch (error) {
               console.error(
                 '[RPCWebView] ZK function execution failed:',
@@ -119,8 +180,8 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
                   stack: error instanceof Error ? error.stack : undefined,
                 },
               };
-              internalWebViewRef.current?.postMessage(
-                JSON.stringify(errorResponse)
+              internalWebViewRef.current?.injectJavaScript(
+                `window.postMessage(${JSON.stringify(errorResponse)});`
               );
             }
 
@@ -225,7 +286,6 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
             onError?.(nativeEvent);
           }}
           injectedJavaScript={injectedJavaScript}
-          webviewDebuggingEnabled={__DEV__}
         />
       </View>
     );

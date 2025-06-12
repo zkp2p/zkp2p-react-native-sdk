@@ -6,15 +6,17 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import type { ProviderSettings } from 'zkp2p-react-native-sdk';
-import type { AuthWVOverrides } from 'zkp2p-react-native-sdk';
+import type {
+  ProviderSettings,
+  InitiateOptions as SDKInitiateOptions,
+} from '../../../src/';
 
 interface Props {
   isAuthenticating: boolean;
   startAuthentication: (
     platform: string,
-    action: string,
-    overrides?: AuthWVOverrides
+    actionType: string,
+    options?: SDKInitiateOptions
   ) => Promise<ProviderSettings>;
   onGoBack: () => void;
 }
@@ -25,11 +27,30 @@ export const AuthenticationScreen: React.FC<Props> = ({
   onGoBack,
 }) => {
   const [activePlatform, setActivePlatform] = useState<string | null>(null);
+  const [autoProofEnabled, setAutoProofEnabled] = useState(false);
 
   const handleSelect = async (platform: string, action: string) => {
     setActivePlatform(platform);
     try {
-      await startAuthentication(platform, action);
+      const authOptions: SDKInitiateOptions = {
+        autoGenerateProof: autoProofEnabled
+          ? {
+              intentHash:
+                '0x0000000000000000000000000000000000000000000000000000000000000001',
+              itemIndex: 0,
+              onProofGenerated: (proofData) => {
+                console.log('Auto-generated proof:', proofData);
+              },
+              onProofError: (error) => {
+                console.error('Auto-generation failed:', error);
+              },
+            }
+          : undefined,
+      };
+
+      if (startAuthentication) {
+        await startAuthentication(platform, action, authOptions);
+      }
     } finally {
       setActivePlatform(null);
     }
@@ -41,6 +62,18 @@ export const AuthenticationScreen: React.FC<Props> = ({
         <Text style={styles.backButtonText}>‹ Back</Text>
       </TouchableOpacity>
       <Text style={styles.title}>Select Platform</Text>
+
+      <View style={styles.toggleContainer}>
+        <Text style={styles.toggleLabel}>Auto-generate proof:</Text>
+        <TouchableOpacity
+          style={[styles.toggle, autoProofEnabled && styles.toggleActive]}
+          onPress={() => setAutoProofEnabled(!autoProofEnabled)}
+        >
+          <Text style={styles.toggleText}>
+            {autoProofEnabled ? 'ON' : 'OFF'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         style={[
@@ -177,6 +210,41 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
     marginTop: 30,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    marginRight: 10,
+    color: '#333',
+  },
+  toggle: {
+    backgroundColor: '#ddd',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  toggleActive: {
+    backgroundColor: '#007AFF',
+  },
+  toggleText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   button: {
     backgroundColor: '#007AFF',

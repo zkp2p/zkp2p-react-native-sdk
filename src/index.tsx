@@ -1,20 +1,22 @@
 import 'fast-text-encoding';
-import { useZkp2p } from './hooks/useZkp2p';
-import { Zkp2pProvider, Zkp2pContext } from './providers';
 
-export { useZkp2p, Zkp2pProvider, Zkp2pContext };
+export { useZkp2p } from './hooks/useZkp2p';
+export { Zkp2pProvider, Zkp2pContext } from './providers';
+export { Zkp2pClient } from './client';
+export { DEPLOYED_ADDRESSES } from './utils/constants';
+export { currencyInfo } from './utils/currency';
 
 export type {
-  ExtractedItemsList,
+  ExtractedMetadataList,
   NetworkEvent,
   ProviderSettings,
+  ProofData,
+  FlowState,
+  InitiateOptions,
+  AutoGenerateProofOptions,
   SignalIntentParams,
   FulfillIntentParams,
   SignalIntentResponse,
-  AuthWVOverrides,
-  IntentStatusType,
-  Intent,
-  Deposit,
   WithdrawDepositParams,
   CancelIntentParams,
   ReleaseFundsToPayerParams,
@@ -22,17 +24,12 @@ export type {
   PostDepositDetailsRequest,
   DepositVerifierData,
   Currency,
-  GetOwnerDepositsRequest,
-  GetOwnerDepositsResponse,
-  GetDepositOrdersRequest,
-  GetDepositOrdersResponse,
-  GetDepositRequest,
-  GetDepositResponse,
-  GetOwnerIntentsRequest,
-  GetOwnerIntentsResponse,
   IntentSignalRequest,
   QuoteMaxTokenForFiatRequest,
   QuoteResponse,
   GetPayeeDetailsRequest,
   GetPayeeDetailsResponse,
+  AuthWVOverrides,
 } from './types';
+
+export type { GnarkBridge, GnarkProofResult } from './bridges';

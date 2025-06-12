@@ -2,6 +2,21 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Task to copy gnark-circuits to assets
+task copyGnarkCircuits(type: Copy) {
+    from file("${project.rootDir}/../../gnark-circuits")
+    into file("${projectDir}/src/main/assets/gnark-circuits")
+    include "pk.*", "r1cs.*"
+    doFirst {
+        println "[Example App] Copying gnark-circuits from ${project.rootDir}/../../gnark-circuits"
+    }
+    doLast {
+        println "[Example App] Copied circuit files to assets"
+    }
+}
+
+preBuild.dependsOn copyGnarkCircuits
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.

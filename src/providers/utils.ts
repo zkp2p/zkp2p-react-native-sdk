@@ -1,5 +1,5 @@
 import { JSONPath } from 'jsonpath-plus';
-import type { ProviderSettings, ExtractedItemsList } from '../types';
+import type { ProviderSettings, ExtractedMetadataList } from '../types';
 
 /**
  * JSON stringify helper that omits functions which are not serializable.
@@ -11,10 +11,10 @@ export const safeStringify = (v: unknown): string =>
  * Extracts a list of transaction items from a provider response JSON.
  * Returns an empty array on errors.
  */
-export const extractItemsList = (
+export const extractMetadata = (
   json: any,
   cfg: ProviderSettings
-): ExtractedItemsList[] => {
+): ExtractedMetadataList[] => {
   const txCfg = cfg.metadata.transactionsExtraction;
   if (!txCfg) return [];
   try {
@@ -34,7 +34,7 @@ export const extractItemsList = (
         ...row,
         hidden: Object.values(row).some((v) => v == null),
         originalIndex: i,
-      } as ExtractedItemsList;
+      } as ExtractedMetadataList;
     });
   } catch {
     return [];

@@ -4686,7 +4686,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zkp2p/zkp2p-react-native-sdk@workspace:.":
+"@zkp2p/zkp2p-react-native-sdk@workspace:*, @zkp2p/zkp2p-react-native-sdk@workspace:.":
   version: 0.0.0-use.local
   resolution: "@zkp2p/zkp2p-react-native-sdk@workspace:."
   dependencies:
@@ -4718,6 +4718,7 @@ __metadata:
     react: 19.0.0
     react-native: 0.79.2
     react-native-builder-bob: ^0.40.10
+    react-native-svg: ^15.12.0
     react-native-webview: ^13.13.5
     release-it: ^17.10.0
     turbo: ^1.10.7
@@ -4728,6 +4729,7 @@ __metadata:
     "@react-native-cookies/cookies": "*"
     react: "*"
     react-native: "*"
+    react-native-svg: "*"
     react-native-webview: "*"
     viem: ^2.21.55
   languageName: unknown
@@ -16576,6 +16578,7 @@ __metadata:
     "@react-native/metro-config": 0.79.2
     "@react-native/typescript-config": 0.79.2
     "@types/react": ^19.0.0
+    "@zkp2p/zkp2p-react-native-sdk": "workspace:*"
     react: 19.0.0
     react-native: 0.79.2
     react-native-builder-bob: ^0.40.10

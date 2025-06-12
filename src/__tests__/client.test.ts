@@ -22,6 +22,7 @@ describe('Zkp2pClient', () => {
           walletClient,
           apiKey: 'key',
           chainId: 99999,
+          prover: 'reclaim_snarkjs',
         })
     ).toThrow('Unsupported chainId 99999 for ZKP2P contracts.');
   });
@@ -33,6 +34,7 @@ describe('Zkp2pClient', () => {
       apiKey: 'key',
       chainId: base.id,
       rpcUrl,
+      prover: 'reclaim_snarkjs',
     });
     expect(createPublicClient).toHaveBeenCalledWith({
       chain: base,

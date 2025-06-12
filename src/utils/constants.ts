@@ -43,6 +43,23 @@ export const DEPLOYED_ADDRESSES: Contracts = {
     gatingService: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // Hardhat 0
     zkp2pWitnessSigner: '0x0636c417755E3ae25C6c166D181c0607F4C572A3',
   },
+  // 534352: {
+  //   // external contracts
+  //   usdc: '',
+
+  //   // escrow + verifiers
+  //   escrow: '',
+  //   venmo: '',
+  //   revolut: '',
+  //   cashapp: '',
+  //   wise: '',
+  //   mercadopago: '',
+  //   zelle: '',
+
+  //   // offchain services
+  //   gatingService: '0x396D31055Db28C0C6f36e8b36f18FE7227248a97',
+  //   zkp2pWitnessSigner: '0x0636c417755E3ae25C6c166D181c0607F4C572A3',
+  // }
 };
 
 export const chainIds: { [network: string]: string } = {
@@ -60,7 +77,7 @@ export const DEFAULT_PROVIDERS_BASE_URL =
 export const DEFAULT_USER_AGENT = Platform.select({
   ios: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15',
   android:
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.207 Mobile Safari/537.36',
   default:
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15',
 });

@@ -1,7 +1,7 @@
-import { extractItemsList } from '../providers/utils';
+import { extractMetadata } from '../providers/utils';
 import type { ProviderSettings } from '../types';
 
-describe('extractItemsList', () => {
+describe('extractMetadata', () => {
   const cfg: ProviderSettings = {
     actionType: 'deposit',
     authLink: '',
@@ -39,7 +39,7 @@ describe('extractItemsList', () => {
         { id: 2, amount: null },
       ],
     };
-    const res = extractItemsList(json, cfg);
+    const res = extractMetadata(json, cfg);
     expect(res).toEqual([
       { id: 1, amount: 10, hidden: false, originalIndex: 0 },
       { id: 2, amount: null, hidden: true, originalIndex: 1 },

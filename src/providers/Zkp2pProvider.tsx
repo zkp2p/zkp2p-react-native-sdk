@@ -17,6 +17,8 @@ import {
   Animated,
   Easing,
   Image,
+  Platform,
+  Alert,
 } from 'react-native';
 
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -475,6 +477,7 @@ const Zkp2pProvider = ({
   const _handleExternalAction = useCallback(
     async (
       actionUrl: string,
+      cfg: ProviderSettings,
       initialAction: NonNullable<InitiateOptions['initialAction']>
     ) => {
       setFlowState('actionStarted');
@@ -494,11 +497,63 @@ const Zkp2pProvider = ({
         await Linking.openURL(effectiveActionUrl);
       } catch (linkErr) {
         console.error('[zkp2p] Failed to open external URL:', linkErr);
-        setAuthError(
-          new Error(`Failed to open action URL: ${effectiveActionUrl}`)
-        );
-        setFlowState('idle');
-        throw linkErr;
+
+        // Check if app store links are available for fallback
+        const appStoreLink =
+          Platform.OS === 'ios'
+            ? cfg.mobile?.appStoreLink
+            : cfg.mobile?.playStoreLink;
+
+        if (appStoreLink) {
+          // Show alert asking user if they want to open the app store
+          Alert.alert(
+            'App Not Installed',
+            'Download the app from the app store to continue.',
+            [
+              {
+                text: 'Cancel',
+                onPress: () => {
+                  setAuthError(
+                    new Error(
+                      `Failed to open action URL: ${effectiveActionUrl}`
+                    )
+                  );
+                  setFlowState('idle');
+                },
+                style: 'cancel',
+              },
+              {
+                text: 'Open App Store',
+                onPress: async () => {
+                  try {
+                    await Linking.openURL(appStoreLink);
+                    // Still set error state as the original action couldn't complete
+                    setAuthError(
+                      new Error(
+                        'App not installed. Please install and try again.'
+                      )
+                    );
+                    setFlowState('idle');
+                  } catch (storeErr) {
+                    console.error(
+                      '[zkp2p] Failed to open app store:',
+                      storeErr
+                    );
+                    setAuthError(new Error('Failed to open app store'));
+                    setFlowState('idle');
+                  }
+                },
+              },
+            ],
+            { cancelable: true }
+          );
+        } else {
+          // No app store link available, just show error
+          setAuthError(
+            new Error(`Failed to open action URL: ${effectiveActionUrl}`)
+          );
+          setFlowState('idle');
+        }
       }
     },
     [setFlowState, setAuthError]
@@ -513,18 +568,16 @@ const Zkp2pProvider = ({
 
       if (!effectiveActionUrl) return;
 
-      const isHttpUrl = effectiveActionUrl.startsWith('http');
+      const isExternalLink = cfg.mobile?.isExternalLink ?? false;
 
-      if (isHttpUrl) {
-        // HTTP URL - open in WebView with continue button
+      if (isExternalLink) {
+        await _handleExternalAction(effectiveActionUrl, cfg, initialAction);
+      } else {
         await _handleHttpActionInWebView(
           effectiveActionUrl,
           cfg,
           initialAction
         );
-      } else {
-        // Non-HTTP URL - open externally and wait for manual proceed or auto-proceed
-        await _handleExternalAction(effectiveActionUrl, initialAction);
       }
     },
     [_handleHttpActionInWebView, _handleExternalAction]

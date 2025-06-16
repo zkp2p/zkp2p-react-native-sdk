@@ -32,6 +32,22 @@ export const AuthenticationScreen: React.FC<Props> = ({
   const handleSelect = async (platform: string, action: string) => {
     setActivePlatform(platform);
     try {
+      let receiverId;
+      let amount;
+      switch (platform) {
+        case 'venmo':
+          receiverId = 'ethereum';
+          amount = '10';
+          break;
+        case 'revolut':
+          receiverId = 'andrewk';
+          amount = '10';
+          break;
+        default:
+          receiverId = 'ethereum';
+          amount = '10';
+          break;
+      }
       const authOptions: SDKInitiateOptions = {
         autoGenerateProof: autoProofEnabled
           ? {
@@ -46,6 +62,12 @@ export const AuthenticationScreen: React.FC<Props> = ({
               },
             }
           : undefined,
+        initialAction: {
+          urlVariables: {
+            RECEIVER_ID: receiverId,
+            AMOUNT: amount,
+          },
+        },
       };
 
       if (startAuthentication) {

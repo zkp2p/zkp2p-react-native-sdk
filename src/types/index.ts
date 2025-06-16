@@ -306,6 +306,9 @@ export interface ProviderSettings {
     includeAdditionalCookieDomains: string[];
     actionLink: string;
     actionCompletedUrlRegex: string;
+    isExternalLink?: boolean;
+    appStoreLink?: string;
+    playStoreLink?: string;
   };
 }
 

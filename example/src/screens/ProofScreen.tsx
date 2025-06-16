@@ -17,7 +17,6 @@ import type {
   NetworkEvent,
 } from '../../../src';
 
-// Helper function to handle BigInt serialization for JSON.stringify
 function serializeBigInt(_key: string, value: any) {
   if (typeof value === 'bigint') {
     return value.toString();
@@ -25,7 +24,6 @@ function serializeBigInt(_key: string, value: any) {
   return value;
 }
 
-/* ───────────────────────── Props ───────────────────────── */
 interface CombinedScreenProps {
   items: ExtractedMetadataList[];
   onGoBack: () => void;
@@ -42,7 +40,6 @@ interface CombinedScreenProps {
   interceptedPayload: NetworkEvent | null;
 }
 
-/* ───────────────────────── Component ───────────────────── */
 export const ProofScreen: React.FC<CombinedScreenProps> = ({
   items,
   onGoBack,
@@ -273,7 +270,6 @@ export const ProofScreen: React.FC<CombinedScreenProps> = ({
   );
 };
 
-/* ───────────────────────── Styles ──────────────────────── */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f0f0' },
   headerContainer: {

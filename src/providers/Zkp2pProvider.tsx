@@ -93,7 +93,7 @@ const Zkp2pProvider = ({
   walletClient,
   apiKey,
   chainId = 8453,
-  baseApiUrl = 'https://api-staging.zkp2p.xyz/v1',
+  baseApiUrl = 'https://api.zkp2p.xyz/v1',
 }: Zkp2pProviderProps) => {
   // ==========================================================================
   // CLIENT INITIALIZATION
@@ -496,7 +496,7 @@ const Zkp2pProvider = ({
       try {
         await Linking.openURL(effectiveActionUrl);
       } catch (linkErr) {
-        console.error('[zkp2p] Failed to open external URL:', linkErr);
+        console.warn('[zkp2p] Failed to open external URL:', linkErr);
 
         // Check if app store links are available for fallback
         const appStoreLink =

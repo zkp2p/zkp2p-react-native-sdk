@@ -24,17 +24,19 @@ export class GnarkBridge {
 
     this.nativeModule = nativeModule;
 
-    // Create event emitter with the native module
     this.eventEmitter = new NativeEventEmitter(nativeModule as any);
     this.responseListeners = new Map();
 
-    // Set up global event listener
     this.eventEmitter.addListener('GnarkRPCResponse', (event) => {
+      console.log('[GnarkBridge] Received event:', event.id, event.type);
+
       const { id, response, error } = event;
       const listener = this.responseListeners.get(id);
       if (listener) {
         listener({ response, error });
         this.responseListeners.delete(id);
+      } else {
+        console.warn('[GnarkBridge] No listener found for request:', id);
       }
     });
   }
@@ -49,18 +51,37 @@ export class GnarkBridge {
     const requestId = Math.random().toString(36).substring(7);
 
     return new Promise((resolve, reject) => {
-      // Set up response listener
       this.responseListeners.set(requestId, ({ response, error }) => {
+        console.log('[GnarkBridge] Received response for:', requestId);
+
         if (error) {
           reject(new Error(error.message || 'Proof generation failed'));
         } else {
-          resolve(response as GnarkProofResult);
+          if (!response || !response.proof || !response.publicSignals) {
+            console.error(
+              '[GnarkBridge] Invalid response structure:',
+              response
+            );
+            reject(
+              new Error(
+                'Invalid proof response: missing proof or publicSignals'
+              )
+            );
+          } else {
+            resolve(response as GnarkProofResult);
+          }
         }
       });
+
+      console.log(
+        '[GnarkBridge] Calling native groth16Prove with algorithm:',
+        algorithm
+      );
 
       this.nativeModule
         .executeZkFunction(requestId, 'groth16Prove', [witness], algorithm)
         .catch((err: Error) => {
+          console.error('[GnarkBridge] Native module error:', err);
           this.responseListeners.delete(requestId);
           reject(err);
         });

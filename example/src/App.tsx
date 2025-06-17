@@ -271,9 +271,14 @@ export default function App() {
       walletClient={walletClient}
       apiKey={ZKP2P_API_KEY}
       chainId={8453}
-      witnessUrl="https://witness-proxy-dev.zkp2p.xyz"
+      witnessUrl="https://witness-proxy.zkp2p.xyz"
+      configBaseUrl={
+        Platform.OS === 'ios'
+          ? 'http://localhost:8080/'
+          : 'http://10.0.2.2:8080/'
+      }
       rpcTimeout={60000}
-      prover="reclaim_snarkjs"
+      prover="reclaim_gnark"
     >
       <AppContent walletClient={walletClient} />
     </Zkp2pProvider>

@@ -38,6 +38,11 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
           }
 
           if (data.type === 'executeZkFunctionV3' && gnarkBridge) {
+            console.log('[RPCWebView] Received executeZkFunctionV3 request:', {
+              id: data.id,
+              module: data.module,
+              fn: data.request?.fn,
+            });
             try {
               const { fn, args } = data.request;
               let result: any;
@@ -45,29 +50,68 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
               switch (fn) {
                 case 'groth16Prove': {
                   let witness = args[0];
+                  let cipherParsed = 'aes-256-ctr'; // default
 
-                  // Check if witness is in RPC wrapper format and decode it
-                  if (
-                    typeof witness === 'object' &&
-                    witness.type === 'uint8array' &&
-                    witness.value
-                  ) {
-                    // Witness is in RPC wrapper format
+                  // Extract cipher from witness for algorithm selection
+                  try {
+                    let witnessBase64;
+                    if (
+                      typeof witness === 'object' &&
+                      witness.type === 'uint8array' &&
+                      witness.value
+                    ) {
+                      witnessBase64 = witness.value;
+                    } else if (typeof witness === 'string') {
+                      witnessBase64 = witness;
+                    } else {
+                      throw new Error('Invalid witness format');
+                    }
+
+                    const decodedWitness = atob(witnessBase64);
+                    const witnessObj = JSON.parse(decodedWitness);
+                    cipherParsed = witnessObj.cipher || 'aes-256-ctr';
+                  } catch (e) {
+                    console.warn(
+                      '[RPCWebView] Failed to extract cipher from witness:',
+                      e
+                    );
                   }
 
-                  // Decode the witness from the wrapper
-                  const decodedWitness = atob(witness.value);
-                  const witnessObj = JSON.parse(decodedWitness);
-                  const cipherParsed = witnessObj.cipher;
+                  let witnessForGnark: string;
+                  if (typeof witness === 'string') {
+                    witnessForGnark = witness;
+                  } else {
+                    witnessForGnark = JSON.stringify(witness);
+                  }
 
-                  const proofResult = await gnarkBridge.prove(
-                    decodedWitness,
+                  console.log(
+                    '[RPCWebView] Passing witness to gnark with algorithm:',
                     cipherParsed
                   );
 
+                  const proofResult = await gnarkBridge.prove(
+                    witnessForGnark,
+                    cipherParsed
+                  );
+
+                  console.log('[RPCWebView] Proof generated successfully');
+
+                  // Ensure we have valid strings
+                  if (!proofResult.proof || !proofResult.publicSignals) {
+                    throw new Error(
+                      'Invalid proof result: missing proof or publicSignals'
+                    );
+                  }
+
                   result = {
-                    proof: proofResult.proof,
-                    publicSignals: proofResult.publicSignals,
+                    proof: {
+                      type: 'uint8array',
+                      value: proofResult.proof,
+                    },
+                    publicSignals: {
+                      type: 'uint8array',
+                      value: proofResult.publicSignals,
+                    },
                   };
                   break;
                 }
@@ -85,23 +129,39 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
                 );
               }
 
-              // Convert base64 strings to the expected format
               const responseForServer = {
-                id: data.id || '',
+                id: data.id,
                 module: data.module || 'attestor-core',
                 type: 'executeZkFunctionV3Done',
                 isResponse: true,
-                response: {
-                  proof: result.proof,
-                  publicSignals: result.publicSignals,
-                },
+                response: result,
               };
 
-              try {
-                const jsonString = JSON.stringify(responseForServer);
-                internalWebViewRef.current?.injectJavaScript(
-                  `window.postMessage(${jsonString});`
+              if (
+                !responseForServer.response.proof?.value ||
+                !responseForServer.response.publicSignals?.value
+              ) {
+                throw new Error(
+                  'Invalid response structure: missing proof or publicSignals value'
                 );
+              }
+
+              console.log('[RPCWebView] Sending response to server');
+
+              try {
+                // Send response as a STRING to match witness server expectations
+                const responseString = JSON.stringify(responseForServer);
+                internalWebViewRef.current?.injectJavaScript(`
+                  (function() {
+                    try {
+                      const responseStr = ${JSON.stringify(responseString)};
+                      console.log('[RPCWebView] Sending response string via postMessage');
+                      window.postMessage(responseStr, '*');
+                    } catch (err) {
+                      console.error('[RPCWebView] Error sending response:', err);
+                    }
+                  })();
+                `);
               } catch (stringifyError) {
                 console.error(
                   '[RPCWebView] JSON.stringify error:',
@@ -119,15 +179,26 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
                 module: data.module || 'attestor-core',
                 type: 'error',
                 isResponse: true,
-                data: {
-                  message:
-                    error instanceof Error ? error.message : String(error),
-                  stack: error instanceof Error ? error.stack : undefined,
+                error: {
+                  data: {
+                    message:
+                      error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                  },
                 },
               };
-              internalWebViewRef.current?.injectJavaScript(
-                `window.postMessage(${JSON.stringify(errorResponse)});`
-              );
+              const errorString = JSON.stringify(errorResponse);
+              internalWebViewRef.current?.injectJavaScript(`
+                (function() {
+                  try {
+                    const errorStr = ${JSON.stringify(errorString)};
+                    console.log('[RPCWebView] Sending error response string via postMessage');
+                    window.postMessage(errorStr, '*');
+                  } catch (err) {
+                    console.error('[RPCWebView] Error sending error response:', err);
+                  }
+                })();
+              `);
             }
 
             return;
@@ -161,6 +232,7 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
           console.error(\`unhandled promise rejection: \${err.reason}\`, err.reason?.stack);
         };
 
+
         const reactNativePostMessage = window.ReactNativeWebView.postMessage;
         
         const originalWindowPostMessage = window.postMessage;
@@ -184,25 +256,6 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
           
           return originalWindowPostMessage.apply(window, arguments);
         };
-        
-        window.addEventListener('message', function(event) {
-          if (event.source !== window) {
-            try {
-              if(event.data && typeof event.data === 'string') {
-                const parsed = JSON.parse(event.data);
-                if (parsed.isResponse && (parsed.type === 'executeZkFunctionV3Done' || parsed.type === 'error')) {
-                  window.dispatchEvent(new MessageEvent('message', {
-                    data: parsed,
-                    origin: event.origin,
-                    source: window.self,
-                  }));
-                }
-              }
-            } catch(e) {
-               // ignore
-            }
-          }
-        });
         
         true;
       })();

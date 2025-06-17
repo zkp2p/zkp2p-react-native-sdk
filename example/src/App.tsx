@@ -272,11 +272,6 @@ export default function App() {
       apiKey={ZKP2P_API_KEY}
       chainId={8453}
       witnessUrl="https://witness-proxy.zkp2p.xyz"
-      configBaseUrl={
-        Platform.OS === 'ios'
-          ? 'http://localhost:8080/'
-          : 'http://10.0.2.2:8080/'
-      }
       rpcTimeout={60000}
       prover="reclaim_gnark"
     >

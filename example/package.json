@@ -33,7 +33,8 @@
     "@react-native/metro-config": "0.79.2",
     "@react-native/typescript-config": "0.79.2",
     "@types/react": "^19.0.0",
-    "react-native-builder-bob": "^0.40.10"
+    "react-native-builder-bob": "^0.40.10",
+    "react-native-dotenv": "^3.4.11"
   },
   "engines": {
     "node": ">=18"

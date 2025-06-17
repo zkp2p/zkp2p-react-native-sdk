@@ -3,7 +3,16 @@ import type { Address } from 'viem';
 
 type Contracts = {
   [chainId: number]: {
-    [contract: string]: Address;
+    usdc: Address;
+    escrow: Address;
+    venmo: Address;
+    revolut: Address;
+    cashapp: Address;
+    wise: Address;
+    mercadopago: Address;
+    zelle: Address;
+    gatingService: Address;
+    zkp2pWitnessSigner: Address;
   };
 };
 
@@ -21,6 +30,7 @@ export const DEPLOYED_ADDRESSES: Contracts = {
     cashapp: '0x76D33A33068D86016B806dF02376dDBb23Dd3703',
     wise: '0xFF0149799631D7A5bdE2e7eA9b306c42b3d9a9ca',
     mercadopago: '0xf2AC5be14F32Cbe6A613CFF8931d95460D6c33A3',
+    zelle: '0x431a078A5029146aAB239c768A615CD484519aF7',
 
     // offchain services
     gatingService: '0x396D31055Db28C0C6f36e8b36f18FE7227248a97',
@@ -43,23 +53,23 @@ export const DEPLOYED_ADDRESSES: Contracts = {
     gatingService: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // Hardhat 0
     zkp2pWitnessSigner: '0x0636c417755E3ae25C6c166D181c0607F4C572A3',
   },
-  // 534352: {
-  //   // external contracts
-  //   usdc: '',
+  534352: {
+    // external contracts
+    usdc: '0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4',
 
-  //   // escrow + verifiers
-  //   escrow: '',
-  //   venmo: '',
-  //   revolut: '',
-  //   cashapp: '',
-  //   wise: '',
-  //   mercadopago: '',
-  //   zelle: '',
+    // escrow + verifiers
+    escrow: '0x5Fb325174fAFb22C46f7796Ca129980aA16F3405',
+    venmo: '0x120F2AC79c5921f8CFAe530Ceac5E635DC6972b5',
+    revolut: '0x17463cb89A62c7b4A5ecD949aFDEDBD0Aa047ad1',
+    cashapp: '0x8499f2e7c4496Acfe0D7Ca5C7b6522514877b33F',
+    wise: '0x7E34909A1C1b2a4D2FAbA61c17a0F59ECAce6F29',
+    mercadopago: '0xe4148B108Fe4D7421853FE8cFfd35bDc2c0d95Ec',
+    zelle: '0x54c92a8828A393C5A6D1DfbB71d0e9e97329b39C',
 
-  //   // offchain services
-  //   gatingService: '0x396D31055Db28C0C6f36e8b36f18FE7227248a97',
-  //   zkp2pWitnessSigner: '0x0636c417755E3ae25C6c166D181c0607F4C572A3',
-  // }
+    // offchain services
+    gatingService: '0x396D31055Db28C0C6f36e8b36f18FE7227248a97',
+    zkp2pWitnessSigner: '0x0636c417755E3ae25C6c166D181c0607F4C572A3',
+  },
 };
 
 export const chainIds: { [network: string]: string } = {

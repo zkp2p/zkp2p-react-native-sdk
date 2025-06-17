@@ -78,10 +78,16 @@ export async function createDeposit(
     );
 
     const verifierAddresses = params.processorNames.map((processorName) => {
-      if (!DEPLOYED_ADDRESSES?.[chainId]?.[processorName]) {
+      if (
+        !DEPLOYED_ADDRESSES?.[chainId]?.[
+          processorName as keyof (typeof DEPLOYED_ADDRESSES)[number]
+        ]
+      ) {
         throw new Error(`Processor name ${processorName} not found`);
       }
-      return DEPLOYED_ADDRESSES?.[chainId]?.[processorName];
+      return DEPLOYED_ADDRESSES?.[chainId]?.[
+        processorName as keyof (typeof DEPLOYED_ADDRESSES)[number]
+      ];
     });
 
     const depositDetails: PostDepositDetailsRequest[] = params.depositData.map(

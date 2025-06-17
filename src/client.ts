@@ -1,6 +1,6 @@
 import type { Address, Hash, PublicClient, WalletClient, Chain } from 'viem';
 import { createPublicClient, http } from 'viem';
-import { base, hardhat } from 'viem/chains';
+import { base, hardhat, scroll } from 'viem/chains';
 import {
   DEPLOYED_ADDRESSES,
   DEFAULT_BASE_API_URL,
@@ -42,7 +42,18 @@ export class Zkp2pClient {
   readonly chainId: number;
   readonly baseApiUrl: string;
   readonly witnessUrl: string;
-  readonly addresses: { escrow: Address };
+  readonly addresses: {
+    escrow: Address;
+    usdc: Address;
+    venmo: Address;
+    revolut: Address;
+    cashapp: Address;
+    wise: Address;
+    mercadopago: Address;
+    zelle: Address;
+    gatingService: Address;
+    zkp2pWitnessSigner: Address;
+  };
   readonly publicClient: PublicClient;
 
   /**
@@ -58,29 +69,42 @@ export class Zkp2pClient {
     this.witnessUrl = opts.witnessUrl || DEFAULT_WITNESS_URL;
 
     const contractAddresses = DEPLOYED_ADDRESSES[this.chainId];
-    if (!contractAddresses?.escrow)
+    if (!contractAddresses)
       throw new Error(
         `Unsupported chainId ${opts.chainId} for ZKP2P contracts.`
       );
-    this.addresses = { escrow: contractAddresses.escrow };
 
-    let selectedChainObject: Chain;
-    if (this.chainId === base.id) {
-      selectedChainObject = base;
-    } else if (this.chainId === hardhat.id) {
-      selectedChainObject = hardhat;
-    } else {
-      // If the chainId doesn't match a pre-configured one (like Base),
-      // we cannot automatically provide a default RPC URL.
-      // Throw an error to indicate this configuration issue.
-      // The Zkp2pClientOptions could be extended in the future to allow passing a custom rpcUrl.
+    this.addresses = {
+      escrow: contractAddresses.escrow,
+      usdc: contractAddresses.usdc,
+      venmo: contractAddresses.venmo,
+      revolut: contractAddresses.revolut,
+      cashapp: contractAddresses.cashapp,
+      wise: contractAddresses.wise,
+      mercadopago: contractAddresses.mercadopago,
+      zelle: contractAddresses.zelle,
+      gatingService: contractAddresses.gatingService,
+      zkp2pWitnessSigner: contractAddresses.zkp2pWitnessSigner,
+    };
+
+    // Create a mapping of supported chains
+    const supportedChains: Record<number, Chain> = {
+      [base.id]: base,
+      [hardhat.id]: hardhat,
+      [scroll.id]: scroll,
+    };
+
+    // Check if the chain is supported
+    const selectedChainObject = supportedChains[this.chainId];
+
+    if (!selectedChainObject) {
       throw new Error(
-        `Zkp2pClient: The public client for chain ID ${this.chainId} is not configured with a default RPC URL. ` +
-          `Currently, only Base (ID: ${base.id}) and Hardhat (ID: ${hardhat.id}) are auto-configured. ` +
-          `Please use a supported chain or supply the rpcUrl option.`
+        `Zkp2pClient: Chain ID ${this.chainId} is not supported. ` +
+          `Supported chains are: Base (${base.id}), Hardhat (${hardhat.id}), and Scroll (${scroll.id}).`
       );
     }
 
+    // Use the pre-configured chain, with optional RPC URL override
     this.publicClient = createPublicClient({
       chain: selectedChainObject,
       transport: http(opts.rpcUrl), // allow overriding the default RPC URL
@@ -239,5 +263,19 @@ export class Zkp2pClient {
       console.error('[zkp2p] Error fetching account intent:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get the USDC contract address for the current chain
+   */
+  getUsdcAddress(): Address {
+    return this.addresses.usdc;
+  }
+
+  /**
+   * Get all deployed addresses for the current chain
+   */
+  getDeployedAddresses(): typeof this.addresses {
+    return this.addresses;
   }
 }

@@ -1,33 +1,38 @@
 import { useState, useEffect } from 'react';
-import { SafeAreaView, StyleSheet, View, Text, Platform } from 'react-native';
+import {
+  SafeAreaView,
+  StyleSheet,
+  View,
+  Text,
+  Platform,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  ScrollView,
+} from 'react-native';
 import { Zkp2pProvider, useZkp2p } from '../../src/';
 import { AuthenticationScreen } from './screens/AuthenticationScreen';
 import { ProofScreen } from './screens/ProofScreen';
 import { ApiFunctionsScreen } from './screens/ApiFunctionsScreen';
 import { HomeScreen } from './screens/HomeScreen';
+import { ZKP2P_API_KEY } from '@env';
 
 // Viem for local wallet client
-import { createWalletClient, http } from 'viem';
+import {
+  createWalletClient,
+  http,
+  createPublicClient,
+  formatEther,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { hardhat } from 'viem/chains';
+import { base } from 'viem/chains';
 
-const ZKP2P_API_KEY = 'your-api-key';
-
-const privateKey =
-  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // Hardhat 0
-const account = privateKeyToAccount(privateKey);
-const ephemeralWalletClient = createWalletClient({
-  account,
-  chain: hardhat,
-  transport: http(),
-});
-
-console.log(`Using ephemeral account: ${account.address}`);
-
-function AppContent() {
+function AppContent({ walletClient }: { walletClient: any }) {
   const [currentScreen, setCurrentScreen] = useState<
     'home' | 'api' | 'auth' | 'itemsAndProof'
   >('home');
+  const [ethBalance, setEthBalance] = useState<string>('0');
+  const [usdcBalance, setUsdcBalance] = useState<string>('0');
 
   const {
     provider: zkp2pProviderConfig,
@@ -48,10 +53,54 @@ function AppContent() {
   useEffect(() => {
     if (zkp2pClient) {
       console.log(
-        'ZKP2P Client is initialized with ephemeral wallet and available via useZkp2p()'
+        'ZKP2P Client is initialized with wallet and available via useZkp2p()'
       );
     }
   }, [zkp2pClient, flowState, isAuthenticated]);
+
+  // Fetch ETH and USDC balances
+  useEffect(() => {
+    const fetchBalances = async () => {
+      if (walletClient?.account?.address && zkp2pClient) {
+        try {
+          const publicClient = createPublicClient({
+            chain: base,
+            transport: http('https://mainnet.base.org'),
+          });
+
+          // Fetch ETH balance
+          const ethBal = await publicClient.getBalance({
+            address: walletClient.account.address,
+          });
+          setEthBalance(formatEther(ethBal));
+
+          // Fetch USDC balance using zkp2pClient
+          const usdcAddress = zkp2pClient.getUsdcAddress();
+          if (usdcAddress) {
+            const usdcBal = await publicClient.readContract({
+              address: usdcAddress,
+              abi: [
+                {
+                  constant: true,
+                  inputs: [{ name: 'account', type: 'address' }],
+                  name: 'balanceOf',
+                  outputs: [{ name: '', type: 'uint256' }],
+                  type: 'function',
+                },
+              ],
+              functionName: 'balanceOf',
+              args: [walletClient.account.address],
+            });
+            // USDC has 6 decimals
+            setUsdcBalance((Number(usdcBal) / 1e6).toFixed(2));
+          }
+        } catch (error) {
+          console.error('Error fetching balances:', error);
+        }
+      }
+    };
+    fetchBalances();
+  }, [walletClient, zkp2pClient]);
 
   useEffect(() => {
     if (flowState === 'authenticated') {
@@ -84,7 +133,13 @@ function AppContent() {
     }
 
     if (currentScreen === 'api') {
-      return <ApiFunctionsScreen onGoBack={handleGoBack} />;
+      return (
+        <ApiFunctionsScreen
+          onGoBack={handleGoBack}
+          ethBalance={ethBalance}
+          usdcBalance={usdcBalance}
+        />
+      );
     }
 
     if (currentScreen === 'auth') {
@@ -135,21 +190,92 @@ function AppContent() {
 }
 
 export default function App() {
+  const [privateKey, setPrivateKey] = useState<string>('');
+  const [walletClient, setWalletClient] = useState<any>(null);
+  const [isWalletReady, setIsWalletReady] = useState(false);
+  const [error, setError] = useState<string>('');
+
+  const handleSetupWallet = () => {
+    try {
+      setError('');
+      // Validate private key format
+      if (!privateKey.startsWith('0x') || privateKey.length !== 66) {
+        setError(
+          'Invalid private key format. Must be 0x followed by 64 hex characters.'
+        );
+        return;
+      }
+
+      const account = privateKeyToAccount(privateKey as `0x${string}`);
+      const client = createWalletClient({
+        account,
+        chain: base,
+        transport: http('https://mainnet.base.org'),
+      });
+
+      setWalletClient(client);
+      setIsWalletReady(true);
+      console.log(`Using account: ${account.address}`);
+    } catch (err) {
+      setError('Failed to create wallet. Please check your private key.');
+      console.error(err);
+    }
+  };
+
+  if (!isWalletReady) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView contentContainerStyle={styles.setupContainer}>
+          <Text style={styles.setupTitle}>ZKP2P React Native SDK</Text>
+          <Text style={styles.setupSubtitle}>
+            Enter your private key to get started
+          </Text>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="0x..."
+              value={privateKey}
+              onChangeText={setPrivateKey}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={[
+              styles.setupButton,
+              !privateKey && styles.setupButtonDisabled,
+            ]}
+            onPress={handleSetupWallet}
+            disabled={!privateKey}
+          >
+            <Text style={styles.setupButtonText}>Connect Wallet</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.warningText}>
+            ⚠️ Never share your private key. This is for testing purposes only.
+          </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
     <Zkp2pProvider
-      walletClient={ephemeralWalletClient as any}
+      walletClient={walletClient}
       apiKey={ZKP2P_API_KEY}
-      chainId={31337}
+      chainId={8453}
       witnessUrl="https://witness-proxy-dev.zkp2p.xyz"
-      configBaseUrl={
-        Platform.OS === 'android'
-          ? 'http://10.0.2.2:8080/' // Android emulator host
-          : 'http://localhost:8080/' // iOS/web
-      }
       rpcTimeout={60000}
       prover="reclaim_snarkjs"
     >
-      <AppContent />
+      <AppContent walletClient={walletClient} />
     </Zkp2pProvider>
   );
 }
@@ -166,8 +292,9 @@ const styles = StyleSheet.create({
   subText: { fontSize: 12, color: 'grey', marginTop: 5 },
   errorText: {
     color: 'red',
-    fontSize: 16,
+    fontSize: 14,
     textAlign: 'center',
+    marginTop: 10,
   },
   backButton: {
     position: 'absolute',
@@ -179,5 +306,56 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#007AFF',
     fontSize: 16,
+  },
+  setupContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  setupTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  setupSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 40,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 15,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  setupButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  setupButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  setupButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  warningText: {
+    color: '#ff9500',
+    fontSize: 14,
+    marginTop: 30,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });

@@ -26,7 +26,13 @@ cd example
 yarn install
 ```
 
-2. Run the app:
+2. Set up the environment variables:
+```bash
+cp .env.example .env
+```
+Ask for an API key from the ZKP2P team.
+
+3. Run the app:
 ```bash
 # For iOS
 cd ios

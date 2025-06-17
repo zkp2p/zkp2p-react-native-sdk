@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useZkp2p, DEPLOYED_ADDRESSES, currencyInfo } from '../../../src/';
 import type { Hash } from 'viem';
@@ -18,9 +19,15 @@ import { BigNumber } from 'ethers';
 
 interface ApiFunctionsScreenProps {
   onGoBack: () => void;
+  ethBalance: string;
+  usdcBalance: string;
 }
 
-export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
+export function ApiFunctionsScreen({
+  onGoBack,
+  ethBalance,
+  usdcBalance,
+}: ApiFunctionsScreenProps) {
   const { zkp2pClient } = useZkp2p();
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [isIntentLoading, setIsIntentLoading] = useState(false);
@@ -32,9 +39,32 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
   >(null);
   const [deposits, setDeposits] = useState<EscrowDepositView[]>([]);
   const [intent, setIntent] = useState<EscrowIntentView | null>(null);
+  const [venmoUsername, setVenmoUsername] = useState<string | null>(null);
 
-  // Find the first active deposit for signaling intent
-  const firstActiveDeposit = deposits.find((d) => d.deposit.acceptingIntents);
+  // Find the first active deposit that is for Venmo with at least 1 USDC available
+  const firstActiveDeposit = deposits.find((d) => {
+    // Check if deposit is accepting intents
+    if (!d.deposit.acceptingIntents) return false;
+
+    // Check if deposit has at least 1 USDC (1000000 in 6 decimals)
+    if (d.availableLiquidity.lt(BigNumber.from(1000000))) return false;
+
+    // Check if any verifier is for Venmo
+    const venmoAddress = zkp2pClient?.getDeployedAddresses().venmo;
+    return d.verifiers.some(
+      (v) => v.verifier.toLowerCase() === venmoAddress?.toLowerCase()
+    );
+  });
+
+  // Get payee details hash from the first Venmo verifier
+  const getPayeeDetailsHash = () => {
+    if (!firstActiveDeposit) return null;
+    const venmoAddress = zkp2pClient?.getDeployedAddresses().venmo;
+    const venmoVerifier = firstActiveDeposit.verifiers.find(
+      (v) => v.verifier.toLowerCase() === venmoAddress?.toLowerCase()
+    );
+    return venmoVerifier?.verificationData.payeeDetails || null;
+  };
 
   const fetchDeposits = useCallback(async () => {
     if (!zkp2pClient?.walletClient?.account) return;
@@ -60,6 +90,28 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
         zkp2pClient.walletClient.account.address
       );
       setIntent(result);
+
+      // If we have an intent, fetch the payee details to get venmo username
+      if (result && zkp2pClient) {
+        try {
+          const payeeDetailsResult = await zkp2pClient.getPayeeDetails({
+            hashedOnchainId:
+              result.deposit.verifiers.find(
+                (v) =>
+                  v.verifier.toLowerCase() ===
+                  zkp2pClient.getDeployedAddresses().venmo?.toLowerCase()
+              )?.verificationData.payeeDetails || '',
+            platform: 'venmo',
+          });
+          if (payeeDetailsResult?.responseObject.depositData.venmoUsername) {
+            setVenmoUsername(
+              payeeDetailsResult.responseObject.depositData.venmoUsername
+            );
+          }
+        } catch (error) {
+          console.error('Error fetching payee details:', error);
+        }
+      }
     } catch (error) {
       console.error('Error fetching intents:', error);
       setIntent(null);
@@ -85,14 +137,14 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
     try {
       const result = await zkp2pClient.createDeposit({
         token: DEPLOYED_ADDRESSES[zkp2pClient.chainId]?.usdc as `0x${string}`,
-        amount: BigInt(10000000),
+        amount: BigInt(1000000),
         intentAmountRange: {
-          min: BigInt(1000000),
-          max: BigInt(20000000),
+          min: BigInt(100000),
+          max: BigInt(1000000),
         },
         conversionRates: [
           {
-            currency: currencyInfo.USD?.currencyCodeHash as string,
+            currency: currencyInfo.USD?.currency as string,
             conversionRate: '1000000000000000000',
           },
         ],
@@ -125,15 +177,20 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
     if (!zkp2pClient || !firstActiveDeposit) return;
     setIsIntentLoading(true);
     setIntentTransactionHash(null);
+    const payeeDetailsHash = getPayeeDetailsHash();
+    if (!payeeDetailsHash) {
+      console.error('No payee details hash found');
+      return;
+    }
+
     try {
       await zkp2pClient.signalIntent({
         processorName: 'venmo',
-        depositId: firstActiveDeposit.depositId.toString(), // Use the found active deposit
+        depositId: firstActiveDeposit.depositId.toString(),
         tokenAmount: '1000000',
-        payeeDetails:
-          '0xbf074ba2ed0010ad3ca9bfe79c403f60fdc599cbb1113972a8f9448933b939ad', // Example, ensure valid
-        toAddress: '0x0000000000000000000000000000000000000001',
-        currency: currencyInfo.USD?.currencyCodeHash as string,
+        payeeDetails: payeeDetailsHash,
+        toAddress: zkp2pClient.walletClient?.account?.address as `0x${string}`,
+        currency: currencyInfo.USD?.currency as string,
         onSuccess: (data) => {
           setIntentTransactionHash(data.hash);
         },
@@ -211,6 +268,19 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
         <Text style={styles.title}>ZKP2P API Functions</Text>
       </View>
 
+      <View style={styles.balanceContainer}>
+        <Text style={styles.balanceLabel}>Wallet Address:</Text>
+        <Text style={styles.addressText}>
+          {zkp2pClient?.walletClient?.account?.address || 'Not connected'}
+        </Text>
+        <Text style={styles.balanceLabel}>ETH Balance:</Text>
+        <Text style={styles.balanceText}>{ethBalance} ETH</Text>
+        <Text style={[styles.balanceLabel, styles.balanceLabelWithMargin]}>
+          USDC Balance:
+        </Text>
+        <Text style={styles.balanceText}>{usdcBalance} USDC</Text>
+      </View>
+
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={[styles.button, isDepositLoading && styles.buttonDisabled]}
@@ -220,7 +290,7 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
           <Text style={styles.buttonText}>
             {isDepositLoading
               ? 'Creating Deposit...'
-              : 'Create 10 USDC Deposit'}
+              : 'Create 1 USDC Deposit for Venmo'}
           </Text>
         </TouchableOpacity>
 
@@ -237,7 +307,7 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
           <Text style={styles.buttonText}>
             {isIntentLoading
               ? 'Signaling Intent...'
-              : 'Signal Intent for 1 USDC'}
+              : 'Signal Intent for 1 USDC for Venmo'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -297,8 +367,11 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
         <Text style={styles.tableTitle}>Your Intents</Text>
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText]}>Intent Hash</Text>
+            <Text style={[styles.tableHeaderText, styles.flex2]}>
+              Intent Hash
+            </Text>
             <Text style={[styles.tableHeaderText]}>Amount</Text>
+            <Text style={[styles.tableHeaderText]}>Venmo ID</Text>
             <Text style={[styles.tableHeaderText]}>Action</Text>
           </View>
           {!intent && (
@@ -306,12 +379,13 @@ export function ApiFunctionsScreen({ onGoBack }: ApiFunctionsScreenProps) {
           )}
           {intent && (
             <View key={intent.intentHash} style={styles.tableRow}>
-              <Text style={[styles.tableCell]}>
+              <Text style={[styles.tableCell, styles.flex2]}>
                 {intent.intentHash.slice(0, 8)}...
               </Text>
               <Text style={[styles.tableCell]}>
                 {Number(intent.intent.amount) / 10 ** 6}
               </Text>
+              <Text style={[styles.tableCell]}>{venmoUsername || '-'}</Text>
               <View>
                 <TouchableOpacity
                   style={[
@@ -522,5 +596,29 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#007AFF',
     fontSize: 17,
+  },
+  balanceContainer: {
+    backgroundColor: '#f5f5f5',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  balanceLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  balanceLabelWithMargin: {
+    marginTop: 10,
+  },
+  addressText: {
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginBottom: 10,
+  },
+  balanceText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
   },
 });

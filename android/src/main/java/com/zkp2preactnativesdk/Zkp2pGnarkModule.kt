@@ -1,6 +1,7 @@
 package com.zkp2preactnativesdk
 
 import android.util.Log
+import android.util.Base64
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
@@ -17,7 +18,6 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
     private val algorithmIdMap = mutableMapOf<String, Int>()
     private var hasListeners = false
     
-    // Algorithm configuration matching iOS
     data class AlgorithmConfig(
         val name: String,
         val id: Int,
@@ -27,11 +27,10 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
     companion object {
         const val NAME = "Zkp2pGnarkModule"
         
-        // Algorithm IDs must match Go constants
         private val ALGORITHM_CONFIGS = arrayOf(
-            AlgorithmConfig("chacha20", 0, "chacha20"),      // CHACHA20 = 0
-            AlgorithmConfig("aes-128-ctr", 1, "aes128"),     // AES_128 = 1
-            AlgorithmConfig("aes-256-ctr", 2, "aes256")      // AES_256 = 2
+            AlgorithmConfig("chacha20", 0, "chacha20"),
+            AlgorithmConfig("aes-128-ctr", 1, "aes128"),
+            AlgorithmConfig("aes-256-ctr", 2, "aes256")
         )
 
         init {
@@ -68,12 +67,9 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
         
         for (config in ALGORITHM_CONFIGS) {
             try {
-                // Look for circuit files in assets/gnark-circuits
                 val pkFilename = "pk.${config.fileExt}"
                 val r1csFilename = "r1cs.${config.fileExt}"
                 
-                
-                // Read circuit files from assets
                 val pkData = readAssetFile(pkFilename)
                 val r1csData = readAssetFile(r1csFilename)
                 
@@ -82,8 +78,6 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
                     continue
                 }
                 
-                
-                // Initialize algorithm using native method
                 try {
                     val result = nativeInitAlgorithm(config.id, pkData, r1csData)
                     
@@ -115,12 +109,9 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
             }
         } catch (e: Exception) {
             Log.e(NAME, "[Zkp2pGnarkModule] Failed to read asset file: $filename", e)
-            
-            
             null
         }
     }
-
 
 
     @ReactMethod
@@ -135,9 +126,7 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
             try {
                 when (functionName) {
                     "groth16Prove" -> {
-                        Log.d(NAME, "groth16Prove called")
-                        Log.d(NAME, "  Algorithm parameter: $algorithm")
-                        Log.d(NAME, "  Available algorithms: ${initializedAlgorithms.joinToString(", ")}")
+                        Log.d(NAME, "[Zkp2pGnarkModule] groth16Prove called with algorithm: $algorithm")
                         
                         if (initializedAlgorithms.isEmpty()) {
                             throw Exception("No algorithms have been initialized. Circuit files may be missing.")
@@ -158,81 +147,65 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
     }
 
     private fun groth16Prove(args: ReadableArray): WritableMap {
-        // The witness comes as a JSON string
-        val witnessJson = args.getString(0) ?: throw IllegalArgumentException("Witness JSON string is null")
+        val argString = args.getString(0) ?: throw IllegalArgumentException("Witness argument is null")
         
-        // IMPORTANT: For gnark, we need at least one initialized algorithm (matching iOS check)
+        val base64Value = try {
+            val argObject = JSONObject(argString)
+            argObject.optString("value") ?: argString
+        } catch (e: Exception) {
+            argString
+        }
+        
+        val witnessBytes = try {
+            Base64.decode(base64Value, Base64.DEFAULT)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Failed to decode base64 witness data: ${e.message}")
+        }
+        
+        val witnessJson = String(witnessBytes, Charsets.UTF_8)
+        
         if (initializedAlgorithms.isEmpty()) {
             throw Exception("No algorithms have been initialized. Circuit files may be missing.")
         }
         
-        // Log witness preview for debugging
-        val witnessPreview = if (witnessJson.length > 200) {
-            witnessJson.substring(0, 200) + "..."
-        } else {
-            witnessJson
-        }
-        Log.d(NAME, "[Zkp2pGnarkModule] Witness preview: $witnessPreview")
-        
-        // Extract cipher from witness to verify it's supported
         try {
             val witnessObj = JSONObject(witnessJson)
             val cipher = witnessObj.optString("cipher", "unknown")
-            Log.d(NAME, "[Zkp2pGnarkModule] Cipher from witness: $cipher")
-            Log.d(NAME, "[Zkp2pGnarkModule] Initialized algorithms: $initializedAlgorithms")
             
-            // Check if we have this algorithm initialized
             if (!initializedAlgorithms.contains(cipher)) {
-                Log.w(NAME, "[Zkp2pGnarkModule] WARNING: Cipher '$cipher' not found in initialized algorithms")
-                Log.w(NAME, "[Zkp2pGnarkModule] Available algorithms: $initializedAlgorithms")
+                Log.w(NAME, "[Zkp2pGnarkModule] WARNING: Cipher '$cipher' not found in initialized algorithms: $initializedAlgorithms")
             }
         } catch (e: Exception) {
-            Log.e(NAME, "[Zkp2pGnarkModule] Failed to parse witness JSON: ${e.message}")
+            // Ignore if witness is not JSON
         }
         
-        Log.d(NAME, "[Zkp2pGnarkModule] Calling Prove function...")
+        Log.d(NAME, "[Zkp2pGnarkModule] Calling Prove function")
         
-        // Call the native Prove function
         val resultJson = nativeProve(witnessJson)
         
-        Log.d(NAME, "[Zkp2pGnarkModule] Prove result length: ${resultJson.length}")
-        
-        // Parse the result JSON
         return try {
             val resultObj = JSONObject(resultJson)
             
             val proofValue = resultObj.optString("proof", "")
             val publicSignalsValue = resultObj.optString("publicSignals", "")
             
-            Log.d(NAME, "[Zkp2pGnarkModule] Success! Proof generated with keys: ${resultObj.keys()}")
+            if (proofValue.isEmpty() || publicSignalsValue.isEmpty()) {
+                throw Exception("Missing proof or publicSignals in result")
+            }
             
-            // Log detailed proof structure for debugging (matching iOS)
-            Log.d(NAME, "[Zkp2pGnarkModule] === PROOF DETAILS ===")
-            Log.d(NAME, "  Proof type: ${proofValue.javaClass.simpleName}")
-            Log.d(NAME, "  Proof length: ${proofValue.length}")
-            Log.d(NAME, "  Proof preview: ${proofValue.take(100)}")
-            Log.d(NAME, "  PublicSignals type: ${publicSignalsValue.javaClass.simpleName}")
-            Log.d(NAME, "  PublicSignals length: ${publicSignalsValue.length}")
-            Log.d(NAME, "  PublicSignals preview: ${publicSignalsValue.take(100)}")
-            Log.d(NAME, "[Zkp2pGnarkModule] ==================")
+            Log.d(NAME, "[Zkp2pGnarkModule] Proof generated successfully")
             
-            // The response format should match what the RPC bridge expects
             Arguments.createMap().apply {
                 putString("proof", proofValue)
                 putString("publicSignals", publicSignalsValue)
             }
         } catch (e: Exception) {
-            // If parsing fails, the result might be an error message
-            // Check if the raw result looks like an error message (not JSON)
             if (!resultJson.startsWith("{") && !resultJson.startsWith("[")) {
-                // The native code returned an error string directly
                 Log.e(NAME, "[Zkp2pGnarkModule] Native error: $resultJson")
                 throw Exception(resultJson)
             } else {
-                // JSON parsing error
                 val errorMsg = "Failed to parse result: ${e.message}"
                 Log.e(NAME, "[Zkp2pGnarkModule] ERROR: $errorMsg")
-                Log.e(NAME, "[Zkp2pGnarkModule] Raw result: $resultJson")
                 throw Exception(errorMsg)
             }
         }
@@ -259,11 +232,9 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
         }
     }
 
-    // Native method declarations
     private external fun nativeInitAlgorithm(algorithmId: Int, provingKey: ByteArray, r1cs: ByteArray): Int
     private external fun nativeProve(witnessJson: String): String
 
-    // Event emitter methods (matching iOS)
     @ReactMethod
     fun addListener(eventName: String) {
         hasListeners = true
@@ -274,7 +245,6 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
         hasListeners = false
     }
     
-    // Define supported events
     fun supportedEvents(): Array<String> {
         return arrayOf("GnarkRPCResponse")
     }

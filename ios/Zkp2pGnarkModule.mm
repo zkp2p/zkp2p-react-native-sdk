@@ -26,11 +26,10 @@ typedef struct {
     NSString *fileExt;
 } AlgorithmConfig;
 
-// Algorithm IDs must match Go constants
 static const AlgorithmConfig ALGORITHM_CONFIGS[] = {
-    {@"chacha20", 0, @"chacha20"},      // CHACHA20 = 0
-    {@"aes-128-ctr", 1, @"aes128"},     // AES_128 = 1
-    {@"aes-256-ctr", 2, @"aes256"},     // AES_256 = 2
+    {@"chacha20", 0, @"chacha20"},
+    {@"aes-128-ctr", 1, @"aes128"},
+    {@"aes-256-ctr", 2, @"aes256"},
 };
 static const NSUInteger ALGORITHM_COUNT = 3;
 
@@ -59,13 +58,11 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
         // Initialize gnark binding
         enforce_binding();
         
-        // Build algorithm ID map
         for (NSUInteger i = 0; i < ALGORITHM_COUNT; i++) {
             AlgorithmConfig config = ALGORITHM_CONFIGS[i];
             self.algorithmIdMap[config.name] = @(config.id);
         }
         
-        // Initialize all algorithms on startup
         [self initializeAllAlgorithms];
     }
     return self;
@@ -176,10 +173,34 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
         @try {
             if ([functionName isEqualToString:@"groth16Prove"] && args.count > 0) {
                 
-                // The witness comes as a JSON string
-                NSString *witnessJson = args[0];
+                NSString *argString = args[0];
                 
-                // IMPORTANT: For gnark, we need at least one initialized algorithm
+                NSError *jsonError;
+                NSData *argData = [argString dataUsingEncoding:NSUTF8StringEncoding];
+                NSDictionary *argDict = [NSJSONSerialization JSONObjectWithData:argData options:0 error:&jsonError];
+                
+                NSString *base64Value;
+                if (jsonError || ![argDict isKindOfClass:[NSDictionary class]]) {
+                    base64Value = argString;
+                } else {
+                    base64Value = argDict[@"value"];
+                }
+                
+                if (!base64Value) {
+                    NSString *errorMsg = @"No base64 value found in argument";
+                    [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
+                    reject(@"INVALID_ARGS", errorMsg, nil);
+                    return;
+                }
+                
+                NSData *witnessData = [[NSData alloc] initWithBase64EncodedString:base64Value options:0];
+                if (!witnessData) {
+                    NSString *errorMsg = @"Failed to decode base64 witness data";
+                    [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
+                    reject(@"DECODE_ERROR", errorMsg, nil);
+                    return;
+                }
+                
                 if (self.initializedAlgorithms.count == 0) {
                     NSString *errorMsg = @"No algorithms have been initialized. Circuit files may be missing.";
                     [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
@@ -187,57 +208,74 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                     return;
                 }
                 
-                // Convert to data for gnark
-                NSData *witnessData = [witnessJson dataUsingEncoding:NSUTF8StringEncoding];
+                NSString *witnessString = [[NSString alloc] initWithData:witnessData encoding:NSUTF8StringEncoding];
+                if (!witnessString) {
+                    NSString *errorMsg = @"Failed to convert witness data to string";
+                    [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
+                    reject(@"DECODE_ERROR", errorMsg, nil);
+                    return;
+                }
                 
-                // Create a copy of the bytes to ensure they remain valid during the Go call
+                NSError *witnessJsonError;
+                NSDictionary *witnessDict = [NSJSONSerialization JSONObjectWithData:witnessData options:0 error:&witnessJsonError];
+                if (!witnessJsonError) {
+                    NSString *cipher = witnessDict[@"cipher"];
+                    if (cipher && ![self.initializedAlgorithms containsObject:cipher]) {
+                        NSLog(@"[Zkp2pGnarkModule] WARNING: Cipher '%@' not in initialized algorithms: %@", 
+                              cipher, self.initializedAlgorithms);
+                    }
+                }
+                
                 NSUInteger witnessLength = [witnessData length];
                 void *witnessCopy = malloc(witnessLength);
                 memcpy(witnessCopy, [witnessData bytes], witnessLength);
                 
-                // Create GoSlice from copied data
                 GoSlice witnessSlice;
                 witnessSlice.data = witnessCopy;
                 witnessSlice.len = witnessLength;
                 witnessSlice.cap = witnessLength;
                 
                 
-                // Call the Prove function
+                NSLog(@"[Zkp2pGnarkModule] Calling Prove function");
+                
                 struct Prove_return result = Prove(witnessSlice);
                 
-                // Free our witness copy
                 free(witnessCopy);
                 
-                
                 if (result.r0 && result.r1 > 0) {
-                    // First create NSData to ensure bytes are copied before freeing
                     NSData *resultData = [NSData dataWithBytes:result.r0 length:(NSUInteger)result.r1];
                     
-                    // Free the memory allocated by Go immediately after copying
                     Free(result.r0);
                     
-                    // Now convert to string from our copied data
                     NSString *resultJson = [[NSString alloc] initWithData:resultData 
                                                                   encoding:NSUTF8StringEncoding];
                     
-                    
-                    // Parse JSON result
-                    NSError *jsonError;
-                    NSData *jsonData = [resultJson dataUsingEncoding:NSUTF8StringEncoding];
-                    NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:jsonData 
+                    NSError *parseError;
+                    NSData *rawData = [resultJson dataUsingEncoding:NSUTF8StringEncoding];
+                    NSDictionary *rawDict = [NSJSONSerialization JSONObjectWithData:rawData 
                                                                             options:0 
-                                                                              error:&jsonError];
+                                                                              error:&parseError];
                     
-                    if (jsonError) {
-                        NSString *errorMsg = [NSString stringWithFormat:@"Failed to parse result: %@", jsonError.localizedDescription];
+                    if (parseError || !rawDict[@"proof"] || !rawDict[@"publicSignals"]) {
+                        NSString *errorMsg = [NSString stringWithFormat:@"Failed to parse result: %@", 
+                                             parseError ? parseError.localizedDescription : @"Missing proof or publicSignals"];
                         NSLog(@"[Zkp2pGnarkModule] ERROR: %@", errorMsg);
                         [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
-                        reject(@"JSON_ERROR", errorMsg, jsonError);
+                        reject(@"JSON_ERROR", errorMsg, parseError);
                         return;
                     }
                     
+                    NSString *proofValue = rawDict[@"proof"];
+                    NSString *publicSignalsValue = rawDict[@"publicSignals"];
                     
-                    [self sendResponse:requestId response:jsonDict error:nil];
+                    NSLog(@"[Zkp2pGnarkModule] Proof generated successfully");
+                    
+                    NSDictionary *response = @{
+                        @"proof": proofValue,
+                        @"publicSignals": publicSignalsValue
+                    };
+                    
+                    [self sendResponse:requestId response:response error:nil];
                     resolve(nil);
                 } else {
                     NSString *errorMsg = @"Prove function failed: returned null or empty result";

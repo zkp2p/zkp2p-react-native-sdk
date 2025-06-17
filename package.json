@@ -1,6 +1,6 @@
 {
   "name": "@zkp2p/zkp2p-react-native-sdk",
-  "version": "0.0.1-rc.4",
+  "version": "0.0.1-rc.12",
   "description": "React Native SDK for ZKP2P",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -38,8 +38,7 @@
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
-    "release": "release-it",
-    "setup:gnark": "node scripts/setup-gnark.js"
+    "release": "release-it"
   },
   "keywords": [
     "react-native",

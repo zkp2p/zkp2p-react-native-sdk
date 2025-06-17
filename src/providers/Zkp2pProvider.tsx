@@ -86,7 +86,7 @@ const AnimatedSvg = Animated.createAnimatedComponent(Svg as any);
 
 const Zkp2pProvider = ({
   children,
-  prover = 'reclaim_snarkjs',
+  prover = 'reclaim_gnark',
   witnessUrl = 'https://witness-proxy.zkp2p.xyz',
   configBaseUrl = 'https://raw.githubusercontent.com/zkp2p/providers/main/',
   rpcTimeout = 30_000,

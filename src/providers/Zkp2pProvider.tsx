@@ -68,7 +68,7 @@ interface Zkp2pProviderProps {
   prover?: 'reclaim_gnark' | 'reclaim_snarkjs' | 'primus_proxy';
   configBaseUrl?: string;
   rpcTimeout?: number;
-  walletClient: WalletClient;
+  walletClient?: WalletClient;
   apiKey?: string;
   chainId?: number;
   baseApiUrl?: string;
@@ -100,7 +100,7 @@ const Zkp2pProvider = ({
   // ==========================================================================
 
   const zkp2pClient = useMemo(() => {
-    if (!apiKey) {
+    if (!apiKey || !walletClient) {
       return null;
     }
     const clientOptions: Zkp2pClientOptions = {
@@ -900,15 +900,15 @@ const Zkp2pProvider = ({
         existingProviderConfig ??
         (await _getOrFetchProviderConfig(platform, actionType, provider));
 
-      // Always handle action link if it exists
-      if (cfg.mobile?.actionLink) {
+      // Handle action link if it exists and skipAction is not true
+      if (cfg.mobile?.actionLink && !options?.skipAction) {
         // If no initialAction provided, create default options
         const actionOptions = initialAction || { enabled: true };
         await _handleInitialAction(cfg, actionOptions);
         return cfg;
       }
 
-      // No action link - proceed directly to authentication
+      // No action link or skipAction is true - proceed directly to authentication
       await _authenticateInternal(cfg);
 
       return cfg;

@@ -15,6 +15,12 @@ cd ios && pod install
 
 ## Quick Start
 
+The SDK supports two modes:
+- **Full Mode**: Access all features including blockchain operations (requires wallet & API key)
+- **Proof-Only Mode**: Generate proofs without wallet or API key
+
+### Full Mode Setup
+
 ```tsx
 import { Zkp2pProvider, useZkp2p } from '@zkp2p/zkp2p-react-native-sdk';
 import { createWalletClient, custom } from 'viem';
@@ -32,7 +38,23 @@ function App() {
       walletClient={walletClient}
       apiKey="your-api-key"
       chainId={8453} // Base
-      prover="reclaim_snarkjs" // or "reclaim_gnark" for native proof generation
+      prover="reclaim_gnark" // or "reclaim_snarkjs"
+    >
+      <YourApp />
+    </Zkp2pProvider>
+  );
+}
+```
+
+### Proof-Only Mode Setup
+
+```tsx
+// No wallet or API key required!
+function App() {
+  return (
+    <Zkp2pProvider
+      chainId={8453} // Base
+      prover="reclaim_gnark"
     >
       <YourApp />
     </Zkp2pProvider>
@@ -46,11 +68,14 @@ function PaymentFlow() {
     initiate,
     authenticate,
     generateProof,
-    zkp2pClient,
+    zkp2pClient, // null in proof-only mode
     proofData,
     metadataList,
   } = useZkp2p();
 
+  // Check mode
+  const isProofOnlyMode = !zkp2pClient;
+  
   // Your component logic
 }
 ```
@@ -61,10 +86,10 @@ function PaymentFlow() {
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `walletClient` | `WalletClient` | Required | Viem wallet client for blockchain interactions |
-| `apiKey` | `string` | Required | Your ZKP2P API key |
+| `walletClient` | `WalletClient` | Optional | Viem wallet client for blockchain interactions (required for full mode) |
+| `apiKey` | `string` | Optional | Your ZKP2P API key (required for full mode) |
 | `chainId` | `number` | `8453` | Blockchain chain ID (8453 for Base) |
-| `prover` | `'reclaim_snarkjs' \| 'reclaim_gnark'` | `'reclaim_snarkjs'` | Proof generation method |
+| `prover` | `'reclaim_snarkjs' \| 'reclaim_gnark'` | `'reclaim_gnark'` | Proof generation method |
 | `witnessUrl` | `string` | `'https://witness-proxy.zkp2p.xyz'` | Witness server URL |
 | `baseApiUrl` | `string` | `'https://api.zkp2p.xyz/v1'` | ZKP2P API base URL |
 | `rpcTimeout` | `number` | `30000` | RPC timeout in milliseconds |

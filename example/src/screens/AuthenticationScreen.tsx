@@ -32,22 +32,11 @@ export const AuthenticationScreen: React.FC<Props> = ({
   const handleSelect = async (platform: string, action: string) => {
     setActivePlatform(platform);
     try {
-      let receiverId;
-      let amount;
-      switch (platform) {
-        case 'venmo':
-          receiverId = 'ethereum';
-          amount = '10';
-          break;
-        case 'revolut':
-          receiverId = 'andrewk';
-          amount = '10';
-          break;
-        default:
-          receiverId = 'ethereum';
-          amount = '10';
-          break;
-      }
+      // Only Wise and Mercado Pago require the action step (opening external app/link)
+      // All other platforms can skip directly to authentication
+      const shouldSkipAction =
+        platform !== 'wise' && platform !== 'mercadopago';
+
       const authOptions: SDKInitiateOptions = {
         autoGenerateProof: autoProofEnabled
           ? {
@@ -62,13 +51,25 @@ export const AuthenticationScreen: React.FC<Props> = ({
               },
             }
           : undefined,
-        initialAction: {
+        skipAction: shouldSkipAction,
+      };
+
+      // Add initialAction with URL variables for platforms that need them (Wise and Mercado Pago)
+      if (!shouldSkipAction) {
+        let receiverId = 'ethereum';
+        let amount = '10';
+
+        if (platform === 'wise') {
+          receiverId = 'andrewk'; // or whatever default for Wise
+        }
+
+        authOptions.initialAction = {
           urlVariables: {
             RECEIVER_ID: receiverId,
             AMOUNT: amount,
           },
-        },
-      };
+        };
+      }
 
       if (startAuthentication) {
         await startAuthentication(platform, action, authOptions);

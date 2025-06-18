@@ -25,6 +25,7 @@ export interface InitiateOptions {
   existingProviderConfig?: ProviderSettings;
   initialAction?: InitialActionOptions;
   autoGenerateProof?: AutoGenerateProofOptions; // true for defaults, object for custom config
+  skipAction?: boolean; // Skip action step and go straight to authentication
 }
 
 export type {

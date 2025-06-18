@@ -93,4 +93,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.9,
   },
+  proofOnlyNote: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 14,
+    marginTop: 20,
+    paddingHorizontal: 20,
+    lineHeight: 20,
+  },
 });

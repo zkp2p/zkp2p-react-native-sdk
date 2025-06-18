@@ -27,7 +27,13 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
 
-function AppContent({ walletClient }: { walletClient: any }) {
+function AppContent({
+  walletClient,
+  onRequestWallet,
+}: {
+  walletClient: any;
+  onRequestWallet: () => void;
+}) {
   const [currentScreen, setCurrentScreen] = useState<
     'home' | 'api' | 'auth' | 'itemsAndProof'
   >('home');
@@ -126,7 +132,13 @@ function AppContent({ walletClient }: { walletClient: any }) {
     if (currentScreen === 'home') {
       return (
         <HomeScreen
-          onNavigateToApi={() => setCurrentScreen('api')}
+          onNavigateToApi={() => {
+            if (!walletClient) {
+              onRequestWallet();
+            } else {
+              setCurrentScreen('api');
+            }
+          }}
           onNavigateToAuth={() => setCurrentScreen('auth')}
         />
       );
@@ -192,7 +204,7 @@ function AppContent({ walletClient }: { walletClient: any }) {
 export default function App() {
   const [privateKey, setPrivateKey] = useState<string>('');
   const [walletClient, setWalletClient] = useState<any>(null);
-  const [isWalletReady, setIsWalletReady] = useState(false);
+  const [showWalletSetup, setShowWalletSetup] = useState(false);
   const [error, setError] = useState<string>('');
 
   const handleSetupWallet = () => {
@@ -214,7 +226,7 @@ export default function App() {
       });
 
       setWalletClient(client);
-      setIsWalletReady(true);
+      setShowWalletSetup(false);
       console.log(`Using account: ${account.address}`);
     } catch (err) {
       setError('Failed to create wallet. Please check your private key.');
@@ -222,16 +234,23 @@ export default function App() {
     }
   };
 
-  if (!isWalletReady) {
+  if (showWalletSetup) {
     return (
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView contentContainerStyle={styles.setupContainer}>
-          <Text style={styles.setupTitle}>ZKP2P React Native SDK</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setShowWalletSetup(false)}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.setupTitle}>Connect Wallet</Text>
           <Text style={styles.setupSubtitle}>
-            Enter your private key to get started
+            Enter your private key to access API functions
           </Text>
 
           <View style={styles.inputContainer}>
@@ -269,13 +288,16 @@ export default function App() {
   return (
     <Zkp2pProvider
       walletClient={walletClient}
-      apiKey={ZKP2P_API_KEY}
+      apiKey={walletClient ? ZKP2P_API_KEY : undefined}
       chainId={8453}
       witnessUrl="https://witness-proxy.zkp2p.xyz"
       rpcTimeout={60000}
       prover="reclaim_gnark"
     >
-      <AppContent walletClient={walletClient} />
+      <AppContent
+        walletClient={walletClient}
+        onRequestWallet={() => setShowWalletSetup(true)}
+      />
     </Zkp2pProvider>
   );
 }
@@ -298,7 +320,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 15,
+    top: 50,
     left: 15,
     zIndex: 1,
     padding: 10,
@@ -357,5 +379,40 @@ const styles = StyleSheet.create({
     marginTop: 30,
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  modeSection: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  modeSectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modeSectionDesc: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    width: '100%',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#ddd',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#666',
+    fontSize: 14,
+  },
+  proofOnlyButton: {
+    backgroundColor: '#34C759',
   },
 });

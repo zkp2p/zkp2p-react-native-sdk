@@ -785,7 +785,6 @@ const Zkp2pProvider = ({
           ownerPrivateKey:
             '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
           client: { url: witnessUrl },
-          zkProofConcurrency: 1,
           zkEngine: prover === 'reclaim_gnark' ? 'gnark' : 'snarkjs',
           zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
         };

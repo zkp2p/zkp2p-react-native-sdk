@@ -66,7 +66,7 @@ import Zkp2pContext from './Zkp2pContext';
 interface Zkp2pProviderProps {
   children: ReactNode;
   witnessUrl?: string;
-  prover?: 'reclaim_gnark' | 'reclaim_snarkjs' | 'primus_proxy';
+  prover?: 'reclaim_gnark' | 'reclaim_snarkjs';
   configBaseUrl?: string;
   rpcTimeout?: number;
   walletClient?: WalletClient;
@@ -228,7 +228,7 @@ const Zkp2pProvider = ({
     useState<NetworkEvent | null>(null);
 
   // Proof generation state
-  const [proofData, setProofData] = useState<ProofData | null>(null);
+  const [proofData, setProofData] = useState<ProofData[]>([]);
   const [proofError, setProofError] = useState<Error | null>(null);
   const [lastProofItemIndex, setLastProofItemIndex] = useState<number>(0);
   const [autoGenerateOptions, setAutoGenerateOptions] =
@@ -779,7 +779,7 @@ const Zkp2pProvider = ({
 
       console.log('[zkp2p] Starting proof generation...');
       setFlowState('proofGenerating');
-      setProofData(null);
+      setProofData([]);
       setProofError(null);
       setLastProofItemIndex(itemIndex);
       try {
@@ -873,12 +873,108 @@ const Zkp2pProvider = ({
         });
 
         const proof = parseReclaimProxyProof(res.response ?? null);
-        setProofData({
+        const proofDataItem: ProofData = {
           proofType: 'reclaim',
           proof: proof,
-        });
-        setFlowState('proofGeneratedSuccess');
-        return res;
+        };
+
+        // Check if we need to generate additional proofs
+        if (
+          providerCfg.additionalProofs &&
+          providerCfg.additionalProofs.length > 0
+        ) {
+          const allProofs: ProofData[] = [proofDataItem];
+
+          for (let i = 0; i < providerCfg.additionalProofs.length; i++) {
+            const additionalProofConfig = providerCfg.additionalProofs[i];
+            if (!additionalProofConfig) continue;
+
+            console.log(
+              `[zkp2p] Generating additional proof ${i + 1}/${providerCfg.additionalProofs.length}...`
+            );
+
+            // Build body with param substitution
+            let additionalBody = additionalProofConfig.body;
+            const additionalParamValues: Record<string, string> = {};
+
+            // Extract param values from the original response
+            additionalProofConfig.paramNames.forEach((paramName, idx) => {
+              const selector = additionalProofConfig.paramSelectors[idx];
+              if (!selector) return;
+
+              let responseBody = payload.response.body ?? '{}';
+              if (providerCfg.metadata.preprocessRegex) {
+                const m = responseBody.match(
+                  new RegExp(providerCfg.metadata.preprocessRegex)
+                );
+                if (m?.[1]) responseBody = m[1];
+              }
+
+              if (selector.type === 'jsonPath') {
+                const path = selector.value.replace(
+                  '{{INDEX}}',
+                  String(itemIndex)
+                );
+                const val = (
+                  JSONPath({
+                    path,
+                    json: JSON.parse(responseBody),
+                    resultType: 'value',
+                  }) as any[]
+                )[0];
+                additionalParamValues[paramName] = String(val ?? '');
+              } else if (selector.type === 'regex') {
+                const m = responseBody.match(new RegExp(selector.value));
+                if (m?.[1]) additionalParamValues[paramName] = m[1];
+              }
+            });
+
+            // Replace param placeholders in body
+            Object.entries(additionalParamValues).forEach(([key, value]) => {
+              additionalBody = additionalBody.replace(`{{${key}}}`, value);
+            });
+
+            // Build new provider config for the additional proof
+            const additionalProviderCfg: ProviderSettings = {
+              ...providerCfg,
+              url: additionalProofConfig.url,
+              method: additionalProofConfig.method,
+              body: additionalBody,
+              paramNames: [],
+              paramSelectors: [],
+              skipRequestHeaders: additionalProofConfig.skipRequestHeaders,
+              secretHeaders: additionalProofConfig.secretHeaders,
+              responseMatches: additionalProofConfig.responseMatches,
+              responseRedactions: additionalProofConfig.responseRedactions,
+            };
+
+            // Generate the additional proof
+            const additionalProofResult = await _generateSingleProof(
+              additionalProviderCfg,
+              payload,
+              intentHash,
+              itemIndex
+            );
+
+            // Extract proof from the result
+            const additionalProof = parseReclaimProxyProof(
+              additionalProofResult.response ?? null
+            );
+            allProofs.push({
+              proofType: 'reclaim',
+              proof: additionalProof,
+            });
+          }
+
+          setProofData(allProofs);
+          setFlowState('proofGeneratedSuccess');
+          return allProofs;
+        } else {
+          // Single proof case
+          setProofData([proofDataItem]);
+          setFlowState('proofGeneratedSuccess');
+          return [proofDataItem];
+        }
       } catch (err) {
         setFlowState('proofGeneratedFailure');
         setProofError(err as Error);
@@ -887,7 +983,119 @@ const Zkp2pProvider = ({
         setRpcKey((k) => k + 1);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [_rpcRequest, witnessUrl, prover, setFlowState, setProofData, setRpcKey]
+  );
+
+  // Internal helper to generate a single proof without modifying state
+  const _generateSingleProof = useCallback(
+    async (
+      providerCfg: ProviderSettings,
+      payload: NetworkEvent,
+      intentHash: string,
+      itemIndex: number = 0
+    ) => {
+      if (!payload) throw new Error('No intercepted payload available');
+      if (prover !== 'reclaim_snarkjs' && prover !== 'reclaim_gnark') {
+        throw new Error(`Unsupported prover: ${prover}`);
+      }
+
+      let body = payload.response.body ?? '{}';
+      if (providerCfg.metadata.preprocessRegex) {
+        const m = body.match(new RegExp(providerCfg.metadata.preprocessRegex));
+        if (m?.[1]) body = m[1];
+      }
+
+      const headersArray = Object.entries(payload.request.headers);
+      const headersToSend: Record<string, string> =
+        providerCfg.skipRequestHeaders.length > 0
+          ? headersArray.reduce(
+              (acc, [name, value]) => {
+                if (!providerCfg.skipRequestHeaders.includes(name)) {
+                  acc[name] = value;
+                }
+                return acc;
+              },
+              {} as Record<string, string>
+            )
+          : {};
+      headersToSend['User-Agent'] = getCustomUserAgent(providerCfg);
+
+      const paramValues: Record<string, string> = {};
+      providerCfg.paramNames?.forEach((name, idx) => {
+        const sel = providerCfg.paramSelectors?.[idx];
+        if (!sel) return;
+        if (sel.type === 'jsonPath') {
+          const val = (
+            JSONPath({
+              path: sel.value.replace('{{INDEX}}', String(itemIndex)),
+              json: JSON.parse(body),
+              resultType: 'value',
+            }) as any[]
+          )[0];
+          paramValues[name] = String(val ?? '');
+        } else {
+          const m = body.match(new RegExp(sel.value));
+          if (m?.[1]) paramValues[name] = m[1];
+        }
+      });
+
+      const secret: { headers: Record<string, string>; cookieStr?: string } = {
+        headers: {},
+      };
+      providerCfg.secretHeaders?.forEach((h) => {
+        h === 'Cookie'
+          ? (secret.cookieStr = payload.request.cookie ?? '')
+          : (secret.headers[h] = payload.request.headers[h] ?? '');
+      });
+
+      const rpc: RPCCreateClaimOptions = {
+        name: 'http',
+        context: JSON.stringify({
+          contextAddress: '0x0',
+          contextMessage: intentHash,
+        }),
+        params: {
+          url: providerCfg.url,
+          method: providerCfg.method,
+          body: providerCfg.body,
+          headers: headersToSend,
+          paramValues,
+          responseMatches: providerCfg.responseMatches,
+          responseRedactions: providerCfg.responseRedactions?.map((r) => ({
+            jsonPath: r.jsonPath?.replace('{{INDEX}}', String(itemIndex)),
+            regex: r.regex?.replace('{{INDEX}}', String(itemIndex)),
+            xPath: r.xPath?.replace('{{INDEX}}', String(itemIndex)),
+          })),
+          ...(providerCfg.countryCode
+            ? { geoLocation: providerCfg.countryCode }
+            : {}),
+        },
+        secretParams: secret,
+        ownerPrivateKey:
+          '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
+        client: { url: witnessUrl },
+        zkEngine: prover === 'reclaim_gnark' ? 'gnark' : 'snarkjs',
+        zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
+        zkProofConcurrency:
+          prover === 'reclaim_gnark'
+            ? await calculateGnarkDynamicConcurrency()
+            : 1,
+      };
+
+      const res = await _rpcRequest('createClaim', rpc, (stepData) => {
+        console.log('[zkp2p] Proof generation step:', stepData);
+        if (stepData.step?.error) {
+          console.error(
+            '[zkp2p] Proof generation step error:',
+            stepData.step.error
+          );
+        }
+      });
+
+      return res;
+    },
+    [_rpcRequest, witnessUrl, prover]
   );
 
   const _handleAutoGenerateProof = useCallback(
@@ -926,8 +1134,11 @@ const Zkp2pProvider = ({
           targetIndex
         );
 
-        if (flowState === 'proofGeneratedSuccess' && proofData) {
-          options.onProofGenerated?.(proofData);
+        if (flowState === 'proofGeneratedSuccess' && proofData.length > 0) {
+          // For backward compatibility, pass the first proof if only one exists
+          // Otherwise pass the entire array
+          const proofToPass = proofData.length === 1 ? proofData[0] : proofData;
+          options.onProofGenerated?.(proofToPass as any);
         }
 
         return result;
@@ -958,7 +1169,7 @@ const Zkp2pProvider = ({
       setAuthError(null);
       setMetadataList([]);
       setInterceptedPayload(null);
-      setProofData(null);
+      setProofData([]);
 
       // Set auto-generation options once at the beginning
       // These will persist through the entire flow (action link → auth → proof)
@@ -1027,7 +1238,7 @@ const Zkp2pProvider = ({
     if (
       flowState === 'authenticated' &&
       autoGenerateOptions && // If it exists, it's enabled
-      !proofData && // Only auto-generate if no proof exists yet
+      proofData.length === 0 && // Only auto-generate if no proof exists yet
       provider &&
       interceptedPayload &&
       metadataList.length > 0 &&

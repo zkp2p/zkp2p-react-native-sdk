@@ -289,6 +289,18 @@ export interface ProviderMetadata {
   proofMetadataSelectors: Selector[];
 }
 
+export interface AdditionalProof {
+  url: string;
+  method: string;
+  body: string;
+  paramNames: string[];
+  paramSelectors: Selector[];
+  skipRequestHeaders: string[];
+  secretHeaders: string[];
+  responseMatches: ResponseMatch[];
+  responseRedactions: ResponseRedaction[];
+}
+
 export interface ProviderSettings {
   actionType: string;
   authLink: string;
@@ -303,6 +315,7 @@ export interface ProviderSettings {
   secretHeaders: string[];
   responseMatches: ResponseMatch[];
   responseRedactions: ResponseRedaction[];
+  additionalProofs?: AdditionalProof[];
   mobile?: {
     includeAdditionalCookieDomains: string[];
     actionLink: string;

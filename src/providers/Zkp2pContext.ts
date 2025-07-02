@@ -29,8 +29,8 @@ export interface Zkp2pValues {
     payload: NetworkEvent,
     intentHash: string,
     itemIndex?: number
-  ) => Promise<any>;
-  proofData: ProofData | null;
+  ) => Promise<ProofData[]>;
+  proofData: ProofData[];
   zkp2pClient: Zkp2pClient | null;
 }
 
@@ -41,7 +41,7 @@ const Zkp2pContext = React.createContext<Zkp2pValues>({
   metadataList: [],
   interceptedPayload: null,
   authWebViewProps: null,
-  proofData: null,
+  proofData: [],
   zkp2pClient: null,
 });
 

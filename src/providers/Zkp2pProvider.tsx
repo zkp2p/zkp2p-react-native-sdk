@@ -28,6 +28,7 @@ import CookieManager from '@react-native-cookies/cookies';
 import { JSONPath } from 'jsonpath-plus';
 import type { WalletClient } from 'viem';
 import Svg, { Circle } from 'react-native-svg';
+import DeviceInfo from 'react-native-device-info';
 
 import {
   type WindowRPCIncomingMsg,
@@ -79,6 +80,71 @@ interface Zkp2pProviderProps {
 // ============================================================================
 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg as any);
+
+const getCustomUserAgent = (providerCfg?: ProviderSettings): string => {
+  if (!providerCfg?.mobile?.userAgent) {
+    return DEFAULT_USER_AGENT;
+  }
+
+  return (
+    Platform.select({
+      ios: providerCfg.mobile.userAgent.ios,
+      android: providerCfg.mobile.userAgent.android,
+      default: DEFAULT_USER_AGENT,
+    }) || DEFAULT_USER_AGENT
+  );
+};
+
+// ============================================================================
+// MEMORY HELPERS
+// ============================================================================
+
+const calculateGnarkDynamicConcurrency = async (): Promise<number> => {
+  try {
+    const totalMemory = await DeviceInfo.getTotalMemory();
+    const usedMemory = await DeviceInfo.getUsedMemory();
+    const availableMemory = totalMemory - usedMemory;
+
+    // Calculate concurrency based on available memory
+    // Assume each proof needs ~750MB
+    const memoryPerProof = 750 * 1024 * 1024; // 750MB
+    const suggestedConcurrency = Math.floor(
+      (availableMemory * 0.5) / memoryPerProof
+    ); // Use 50% of available
+
+    // Apply limits based on total memory
+    let maxConcurrency = 4;
+    if (totalMemory >= 8 * 1024 * 1024 * 1024) {
+      // 8GB+
+      maxConcurrency = 6;
+    } else if (totalMemory >= 6 * 1024 * 1024 * 1024) {
+      // 6GB+
+      maxConcurrency = 4;
+    } else if (totalMemory >= 4 * 1024 * 1024 * 1024) {
+      // 4GB+
+      maxConcurrency = 3;
+    } else {
+      // Less than 4GB
+      maxConcurrency = 2;
+    }
+
+    const finalConcurrency = Math.max(
+      1,
+      Math.min(suggestedConcurrency, maxConcurrency)
+    );
+    console.log(
+      `[zkp2p] Dynamic concurrency: ${finalConcurrency} (total: ${(totalMemory / 1024 / 1024).toFixed(0)}MB, available: ${(availableMemory / 1024 / 1024).toFixed(0)}MB)`
+    );
+    return finalConcurrency;
+  } catch (error) {
+    console.log(
+      '[zkp2p] Could not determine memory dynamically, using defaults:',
+      error
+    );
+    // Fallback to 1
+    return 1;
+  }
+};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -168,6 +234,21 @@ const Zkp2pProvider = ({
   const [autoGenerateOptions, setAutoGenerateOptions] =
     useState<AutoGenerateProofOptions | null>(null);
 
+  // Cleanup effect for when component unmounts or prover changes
+  useEffect(() => {
+    return () => {
+      // Cancel any active proof generations when unmounting
+      if (gnarkBridge) {
+        gnarkBridge.cancelAllProofs().catch((err) => {
+          console.error('[zkp2p] Error cancelling proofs on unmount:', err);
+        });
+        gnarkBridge.cleanupMemory().catch((err) => {
+          console.error('[zkp2p] Error cleaning up memory on unmount:', err);
+        });
+      }
+    };
+  }, [gnarkBridge]);
+
   // ==========================================================================
   // PROVIDER CONFIGURATION METHODS
   // ==========================================================================
@@ -223,7 +304,7 @@ const Zkp2pProvider = ({
         method: payload.request.method,
         headers: {
           ...payload.request.headers,
-          'User-Agent': DEFAULT_USER_AGENT,
+          'User-Agent': getCustomUserAgent(cfg),
         },
         credentials: 'include',
       };
@@ -296,7 +377,7 @@ const Zkp2pProvider = ({
             method: metadata.method,
             headers: {
               ...evt.request.headers,
-              'User-Agent': DEFAULT_USER_AGENT,
+              'User-Agent': getCustomUserAgent(cfg),
             },
             credentials: 'include',
           };
@@ -324,7 +405,6 @@ const Zkp2pProvider = ({
         const txs = extractMetadata(jsonBody, cfg);
         setMetadataList(txs);
         setInterceptedPayload(evt);
-        setAuthWebViewProps(null);
 
         if (
           txs.length === 0 &&
@@ -335,13 +415,10 @@ const Zkp2pProvider = ({
           );
         }
 
+        // Close webview and update state
+        setAuthWebViewProps(null);
         setFlowState('authenticated');
         setAuthError(itemExtractionError);
-
-        // Add a smooth close transition after authentication
-        setTimeout(() => {
-          setAuthWebViewProps(null);
-        }, 300);
       } catch (err) {
         console.error(
           '[zkp2p] failed to retrieve/process JSON body (via _handleAuthIntercept):',
@@ -372,7 +449,7 @@ const Zkp2pProvider = ({
           cfg.metadata.urlRegex,
           cfg.metadata.fallbackUrlRegex,
         ].filter(Boolean) as string[],
-        userAgent: DEFAULT_USER_AGENT,
+        userAgent: getCustomUserAgent(cfg),
         interceptConfig: {
           xhr: true,
           fetch: true,
@@ -442,7 +519,7 @@ const Zkp2pProvider = ({
       setAuthWebViewProps({
         source: { uri: effectiveActionUrl },
         urlPatterns: [],
-        userAgent: DEFAULT_USER_AGENT,
+        userAgent: getCustomUserAgent(cfg),
         domStorageEnabled: true,
         interceptConfig: { xhr: false, fetch: false, html: false },
         additionalCookieDomainsToInclude:
@@ -658,21 +735,14 @@ const Zkp2pProvider = ({
       } else if (type === 'error') {
         console.error('[zkp2p] RPC error:', data);
 
-        let errorMessage = 'Unknown error';
-        if ((data as any).error?.data?.message) {
-          errorMessage = (data as any).error.data.message;
-        } else if ((data as any).error?.message) {
-          errorMessage = (data as any).error.message;
-        } else if ((data as any).message) {
-          errorMessage = (data as any).message;
-        } else if ((data as any).error) {
-          errorMessage = `RPC Error: ${JSON.stringify((data as any).error)}`;
+        // RPC errors come in format: {type: 'error', data: {message: '...', stack: '...'}}
+        const errorMessage = (data as any).data?.message || 'Unknown error';
+        const error = new Error(errorMessage);
+
+        if ((data as any).data?.stack) {
+          error.stack = (data as any).data.stack;
         }
 
-        const error = new Error(errorMessage);
-        if ((data as any).error?.data?.stack) {
-          error.stack = (data as any).error.data.stack;
-        }
         (error as any).rawData = data;
 
         pending.current[id]?.reject(error);
@@ -733,7 +803,7 @@ const Zkp2pProvider = ({
                 {} as Record<string, string>
               )
             : {};
-        headersToSend['User-Agent'] = DEFAULT_USER_AGENT || '';
+        headersToSend['User-Agent'] = getCustomUserAgent(providerCfg);
         const paramValues: Record<string, string> = {};
         providerCfg.paramNames?.forEach((name, idx) => {
           const sel = providerCfg.paramSelectors?.[idx];
@@ -787,6 +857,10 @@ const Zkp2pProvider = ({
           client: { url: witnessUrl },
           zkEngine: prover === 'reclaim_gnark' ? 'gnark' : 'snarkjs',
           zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
+          zkProofConcurrency:
+            prover === 'reclaim_gnark'
+              ? await calculateGnarkDynamicConcurrency()
+              : 1,
         };
         const res = await _rpcRequest('createClaim', rpc, (stepData) => {
           console.log('[zkp2p] Proof generation step:', stepData);
@@ -995,7 +1069,7 @@ const Zkp2pProvider = ({
       spinAnimation.setValue(0);
       const timer = setTimeout(() => {
         setFlowState('idle');
-      }, 2000);
+      }, 1000);
       return () => clearTimeout(timer);
     } else {
       spinAnimation.setValue(0);
@@ -1041,9 +1115,7 @@ const Zkp2pProvider = ({
           animationType="slide"
           onRequestClose={closeAuthWebView}
         >
-          <Animated.View
-            style={[styles.nativeBackdrop, styles.nativeBackdropVisible]}
-          >
+          <View style={[styles.nativeBackdrop, styles.nativeBackdropVisible]}>
             <View style={styles.nativeWebviewContainer}>
               <View style={styles.nativeHeader}>
                 <TouchableOpacity
@@ -1058,7 +1130,7 @@ const Zkp2pProvider = ({
                 style={styles.nativeWebview}
               />
             </View>
-          </Animated.View>
+          </View>
         </Modal>
       )}
       <RPCWebView key={rpcKey} {...rpcWebViewProps} />
@@ -1070,11 +1142,47 @@ const Zkp2pProvider = ({
         <Modal transparent animationType="fade" visible={true}>
           <View style={styles.proofSpinnerBackdrop}>
             <View style={styles.proofSpinnerCard}>
+              {/* Exit button in top right */}
+              <TouchableOpacity
+                style={styles.proofSpinnerExitButton}
+                onPress={async () => {
+                  console.log(
+                    '[zkp2p] Exit button pressed, cancelling proof generation'
+                  );
+
+                  // Cancel the proof generation if using gnark
+                  if (gnarkBridge && flowState === 'proofGenerating') {
+                    try {
+                      await gnarkBridge.cancelAllProofs();
+                      console.log('[zkp2p] All proof generations cancelled');
+                    } catch (err) {
+                      console.error('[zkp2p] Error cancelling proofs:', err);
+                    }
+                  }
+
+                  // Clean up state
+                  setFlowState('idle');
+                  setProofError(null);
+
+                  // Clean up memory if using gnark
+                  if (gnarkBridge) {
+                    try {
+                      await gnarkBridge.cleanupMemory();
+                      console.log('[zkp2p] Memory cleaned up');
+                    } catch (err) {
+                      console.error('[zkp2p] Error cleaning up memory:', err);
+                    }
+                  }
+                }}
+              >
+                <Text style={styles.proofSpinnerExitText}>✕</Text>
+              </TouchableOpacity>
+
               <Text style={styles.proofSpinnerTitle}>
                 {flowState === 'proofGeneratedSuccess'
-                  ? 'Proof Generated!'
+                  ? 'Successfully Authenticated!'
                   : flowState === 'proofGeneratedFailure'
-                    ? 'Proof Generation Failed'
+                    ? 'Authentication Failed'
                     : 'Authenticating'}
               </Text>
 
@@ -1141,7 +1249,7 @@ const Zkp2pProvider = ({
                 <>
                   <Text style={styles.proofSpinnerSubtitle}>
                     {proofError?.message ||
-                      'An error occurred while generating the proof'}
+                      'An error occurred while authenticating'}
                   </Text>
                   <TouchableOpacity
                     style={styles.retryButton}
@@ -1174,13 +1282,13 @@ const Zkp2pProvider = ({
                 <>
                   <Text style={styles.proofSpinnerSubtitle}>
                     {flowState === 'proofGeneratedSuccess'
-                      ? 'Your proof is ready!'
-                      : 'Authenticating payment...'}
+                      ? 'Authenticated!'
+                      : 'Authenticating...'}
                   </Text>
                 </>
               )}
 
-              <Text style={styles.proofSpinnerPoweredBy}>Powered by ZKP2P</Text>
+              <Text style={styles.proofSpinnerPoweredBy}>Secured by ZKP2P</Text>
             </View>
           </View>
         </Modal>
@@ -1319,6 +1427,20 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: '#aaa',
     fontSize: 14,
+  },
+
+  // Proof spinner exit button styles
+  proofSpinnerExitButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
+    zIndex: 10,
+  },
+  proofSpinnerExitText: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: '300',
   },
 });
 

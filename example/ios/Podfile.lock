@@ -1708,6 +1708,32 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - RNCClipboard (1.16.3):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.11.18.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-hermes
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
+  - RNDeviceInfo (14.0.4):
+    - React-Core
   - RNSVG (15.12.0):
     - DoubleConversion
     - glog
@@ -1759,7 +1785,7 @@ PODS:
     - Yoga
   - SocketRocket (0.7.1)
   - Yoga (0.0.0)
-  - Zkp2pReactNativeSdk (0.0.1-rc.14):
+  - Zkp2pReactNativeSdk (0.0.1-rc.16):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -1861,6 +1887,8 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
+  - "RNCClipboard (from `../node_modules/@react-native-clipboard/clipboard`)"
+  - RNDeviceInfo (from `../node_modules/react-native-device-info`)
   - RNSVG (from `../node_modules/react-native-svg`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
   - Zkp2pReactNativeSdk (from `../..`)
@@ -2019,6 +2047,10 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
+  RNCClipboard:
+    :path: "../node_modules/@react-native-clipboard/clipboard"
+  RNDeviceInfo:
+    :path: "../node_modules/react-native-device-info"
   RNSVG:
     :path: "../node_modules/react-native-svg"
   Yoga:
@@ -2101,11 +2133,13 @@ SPEC CHECKSUMS:
   ReactCodegen: c63eda03ba1d94353fb97b031fc84f75a0d125ba
   ReactCommon: 76d2dc87136d0a667678668b86f0fca0c16fdeb0
   RNCAsyncStorage: 39c42c1e478e1f5166d1db52b5055e090e85ad66
+  RNCClipboard: ea6045252d5c0753cf17f62290f647dc0096f6ac
+  RNDeviceInfo: d863506092aef7e7af3a1c350c913d867d795047
   RNSVG: 8a1054afe490b5d63b9792d7ae3c1fde8c05cdd0
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: c758bfb934100bb4bf9cbaccb52557cee35e8bdf
-  Zkp2pReactNativeSdk: de0fb34f81e76d37c71d6e50c3258f45bf0f739b
+  Zkp2pReactNativeSdk: 560cf75f48573169b91cefd47c05bb3472d49a43
 
 PODFILE CHECKSUM: 3dd7e6e59e916d4c6f026f575dcabe0fd18d5341
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.15.2

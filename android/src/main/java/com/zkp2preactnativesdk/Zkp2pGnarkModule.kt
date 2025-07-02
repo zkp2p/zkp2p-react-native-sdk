@@ -17,6 +17,8 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
     private val initializedAlgorithms = mutableSetOf<String>()
     private val algorithmIdMap = mutableMapOf<String, Int>()
     private var hasListeners = false
+    private val activeProofJobs = mutableMapOf<String, Job>()
+    private val cancelledTasks = mutableSetOf<String>()
     
     data class AlgorithmConfig(
         val name: String,
@@ -122,7 +124,16 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
         algorithm: String,
         promise: Promise
     ) {
-        coroutineScope.launch {
+        // Check if task was already cancelled
+        if (cancelledTasks.contains(requestId)) {
+            cancelledTasks.remove(requestId)
+            val errorMsg = "Proof generation was cancelled"
+            sendResponse(requestId, null, Exception(errorMsg))
+            promise.reject("CANCELLED", errorMsg)
+            return
+        }
+        
+        val job = coroutineScope.launch {
             try {
                 when (functionName) {
                     "groth16Prove" -> {
@@ -132,21 +143,47 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
                             throw Exception("No algorithms have been initialized. Circuit files may be missing.")
                         }
                         
-                        val result = groth16Prove(args)
+                        // Check cancellation before starting
+                        if (cancelledTasks.contains(requestId)) {
+                            cancelledTasks.remove(requestId)
+                            throw CancellationException("Proof generation was cancelled")
+                        }
+                        
+                        val result = groth16Prove(args, requestId)
+                        
+                        // Check cancellation after proof generation
+                        if (cancelledTasks.contains(requestId)) {
+                            cancelledTasks.remove(requestId)
+                            throw CancellationException("Proof generation was cancelled")
+                        }
+                        
                         sendResponse(requestId, result, null)
                         promise.resolve(null)
                     }
                     else -> throw Exception("Unsupported ZK function: $functionName")
                 }
+            } catch (e: CancellationException) {
+                Log.d(NAME, "Proof generation cancelled for request: $requestId")
+                sendResponse(requestId, null, Exception("Proof generation was cancelled"))
+                promise.reject("CANCELLED", e.message)
             } catch (e: Exception) {
                 Log.e(NAME, "ZK function execution failed", e)
                 sendResponse(requestId, null, e)
                 promise.reject("EXECUTION_ERROR", e.message, e)
+            } finally {
+                activeProofJobs.remove(requestId)
             }
         }
+        
+        activeProofJobs[requestId] = job
     }
 
-    private fun groth16Prove(args: ReadableArray): WritableMap {
+    private fun groth16Prove(args: ReadableArray, requestId: String): WritableMap {
+        // Periodically check for cancellation
+        if (cancelledTasks.contains(requestId)) {
+            throw CancellationException("Proof generation was cancelled")
+        }
+        
         val argString = args.getString(0) ?: throw IllegalArgumentException("Witness argument is null")
         
         val base64Value = try {
@@ -177,6 +214,11 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
             }
         } catch (e: Exception) {
             // Ignore if witness is not JSON
+        }
+        
+        // Check cancellation before calling native prove
+        if (cancelledTasks.contains(requestId)) {
+            throw CancellationException("Proof generation was cancelled")
         }
         
         Log.d(NAME, "[Zkp2pGnarkModule] Calling Prove function")
@@ -247,5 +289,59 @@ class Zkp2pGnarkModule(reactContext: ReactApplicationContext) :
     
     fun supportedEvents(): Array<String> {
         return arrayOf("GnarkRPCResponse")
+    }
+    
+    @ReactMethod
+    fun cancelProofGeneration(requestId: String, promise: Promise) {
+        Log.d(NAME, "[Zkp2pGnarkModule] Cancelling proof generation for request: $requestId")
+        
+        // Mark as cancelled
+        cancelledTasks.add(requestId)
+        
+        // Cancel the coroutine job if it exists
+        activeProofJobs[requestId]?.let { job ->
+            job.cancel()
+            activeProofJobs.remove(requestId)
+        }
+        
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+        })
+    }
+    
+    @ReactMethod
+    fun cleanupMemory(promise: Promise) {
+        Log.d(NAME, "[Zkp2pGnarkModule] Cleaning up memory and cancelling all active tasks")
+        
+        // Cancel all active jobs
+        activeProofJobs.forEach { (requestId, job) ->
+            cancelledTasks.add(requestId)
+            job.cancel()
+        }
+        activeProofJobs.clear()
+        cancelledTasks.clear()
+        
+        // Suggest garbage collection (note: this is just a hint to the system)
+        System.gc()
+        
+        promise.resolve(Arguments.createMap().apply {
+            putBoolean("success", true)
+        })
+    }
+    
+    override fun onCatalystInstanceDestroy() {
+        super.onCatalystInstanceDestroy()
+        Log.d(NAME, "[Zkp2pGnarkModule] Catalyst instance destroying, cleaning up resources")
+        
+        // Cancel all active jobs
+        activeProofJobs.forEach { (requestId, job) ->
+            cancelledTasks.add(requestId)
+            job.cancel()
+        }
+        activeProofJobs.clear()
+        cancelledTasks.clear()
+        
+        // Cancel the coroutine scope
+        coroutineScope.cancel()
     }
 } 

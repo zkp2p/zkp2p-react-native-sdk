@@ -310,6 +310,10 @@ export interface ProviderSettings {
     isExternalLink?: boolean;
     appStoreLink?: string;
     playStoreLink?: string;
+    userAgent?: {
+      android: string;
+      ios: string;
+    };
   };
 }
 

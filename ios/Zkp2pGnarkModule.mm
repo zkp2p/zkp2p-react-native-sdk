@@ -36,6 +36,7 @@ static const NSUInteger ALGORITHM_COUNT = 3;
 @interface Zkp2pGnarkModule ()
 @property (nonatomic, strong) NSMutableSet<NSString *> *initializedAlgorithms;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *algorithmIdMap;
+@property (nonatomic, strong) NSMutableSet<NSString *> *cancelledRequests;
 @end
 
 @implementation Zkp2pGnarkModule {
@@ -54,6 +55,7 @@ RCT_EXPORT_MODULE(Zkp2pGnarkModule)
     if (self = [super init]) {
         self.initializedAlgorithms = [NSMutableSet set];
         self.algorithmIdMap = [NSMutableDictionary dictionary];
+        self.cancelledRequests = [NSMutableSet set];
         
         // Initialize gnark binding
         enforce_binding();
@@ -171,6 +173,15 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
 {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @try {
+            // Check if cancelled
+            if ([self.cancelledRequests containsObject:requestId]) {
+                [self.cancelledRequests removeObject:requestId];
+                NSString *errorMsg = @"Proof generation was cancelled";
+                [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
+                reject(@"CANCELLED", errorMsg, nil);
+                return;
+            }
+            
             if ([functionName isEqualToString:@"groth16Prove"] && args.count > 0) {
                 
                 NSString *argString = args[0];
@@ -230,6 +241,16 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                 void *witnessCopy = malloc(witnessLength);
                 memcpy(witnessCopy, [witnessData bytes], witnessLength);
                 
+                // Check if cancelled before proving
+                if ([self.cancelledRequests containsObject:requestId]) {
+                    free(witnessCopy);
+                    [self.cancelledRequests removeObject:requestId];
+                    NSString *errorMsg = @"Proof generation was cancelled";
+                    [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
+                    reject(@"CANCELLED", errorMsg, nil);
+                    return;
+                }
+                
                 GoSlice witnessSlice;
                 witnessSlice.data = witnessCopy;
                 witnessSlice.len = witnessLength;
@@ -241,6 +262,18 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
                 struct Prove_return result = Prove(witnessSlice);
                 
                 free(witnessCopy);
+                
+                // Check if cancelled after proving
+                if ([self.cancelledRequests containsObject:requestId]) {
+                    [self.cancelledRequests removeObject:requestId];
+                    if (result.r0) {
+                        Free(result.r0);
+                    }
+                    NSString *errorMsg = @"Proof generation was cancelled";
+                    [self sendResponse:requestId response:nil error:@{@"message": errorMsg}];
+                    reject(@"CANCELLED", errorMsg, nil);
+                    return;
+                }
                 
                 if (result.r0 && result.r1 > 0) {
                     NSData *resultData = [NSData dataWithBytes:result.r0 length:(NSUInteger)result.r1];
@@ -298,4 +331,33 @@ RCT_EXPORT_METHOD(executeZkFunction:(NSString *)requestId
     });
 }
 
-@end 
+RCT_EXPORT_METHOD(cancelProofGeneration:(NSString *)requestId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+    NSLog(@"[Zkp2pGnarkModule] Cancelling proof generation for request: %@", requestId);
+    
+    // Mark as cancelled
+    [self.cancelledRequests addObject:requestId];
+    
+    resolve(@{@"success": @YES});
+}
+
+RCT_EXPORT_METHOD(cleanupMemory:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+    NSLog(@"[Zkp2pGnarkModule] Cleaning up memory");
+    
+    // Clear cancelled requests
+    [self.cancelledRequests removeAllObjects];
+    
+    // Force garbage collection (note: this is just a hint to the system)
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // This helps trigger memory cleanup
+        [[NSURLCache sharedURLCache] removeAllCachedResponses];
+    });
+    
+    resolve(@{@"success": @YES});
+}
+
+@end

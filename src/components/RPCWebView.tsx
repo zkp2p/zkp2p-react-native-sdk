@@ -135,6 +135,7 @@ export const RPCWebView = forwardRef<WebView, RPCWebViewProps>(
                 type: 'executeZkFunctionV3Done',
                 isResponse: true,
                 response: result,
+                ...(result.requestId ? { requestId: result.requestId } : {}),
               };
 
               if (

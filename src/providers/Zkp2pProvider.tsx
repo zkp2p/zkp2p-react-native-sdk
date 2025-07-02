@@ -1398,7 +1398,6 @@ const Zkp2pProvider = ({
               </Text>
 
               <View style={styles.proofSpinnerWrapper}>
-                {/* SVG Spinning ring */}
                 <AnimatedSvg
                   width={128}
                   height={128}
@@ -1417,7 +1416,6 @@ const Zkp2pProvider = ({
                   ]}
                   viewBox="0 0 128 128"
                 >
-                  {/* Base circle (gray) */}
                   <Circle
                     cx="64"
                     cy="64"

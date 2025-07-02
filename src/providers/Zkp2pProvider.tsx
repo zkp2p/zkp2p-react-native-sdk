@@ -28,6 +28,7 @@ import CookieManager from '@react-native-cookies/cookies';
 import { JSONPath } from 'jsonpath-plus';
 import type { WalletClient } from 'viem';
 import Svg, { Circle } from 'react-native-svg';
+import DeviceInfo from 'react-native-device-info';
 
 import {
   type WindowRPCIncomingMsg,
@@ -65,7 +66,7 @@ import Zkp2pContext from './Zkp2pContext';
 interface Zkp2pProviderProps {
   children: ReactNode;
   witnessUrl?: string;
-  prover?: 'reclaim_gnark' | 'reclaim_snarkjs' | 'primus_proxy';
+  prover?: 'reclaim_gnark' | 'reclaim_snarkjs';
   configBaseUrl?: string;
   rpcTimeout?: number;
   walletClient?: WalletClient;
@@ -79,6 +80,71 @@ interface Zkp2pProviderProps {
 // ============================================================================
 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg as any);
+
+const getCustomUserAgent = (providerCfg?: ProviderSettings): string => {
+  if (!providerCfg?.mobile?.userAgent) {
+    return DEFAULT_USER_AGENT;
+  }
+
+  return (
+    Platform.select({
+      ios: providerCfg.mobile.userAgent.ios,
+      android: providerCfg.mobile.userAgent.android,
+      default: DEFAULT_USER_AGENT,
+    }) || DEFAULT_USER_AGENT
+  );
+};
+
+// ============================================================================
+// MEMORY HELPERS
+// ============================================================================
+
+const calculateGnarkDynamicConcurrency = async (): Promise<number> => {
+  try {
+    const totalMemory = await DeviceInfo.getTotalMemory();
+    const usedMemory = await DeviceInfo.getUsedMemory();
+    const availableMemory = totalMemory - usedMemory;
+
+    // Calculate concurrency based on available memory
+    // Assume each proof needs ~750MB
+    const memoryPerProof = 750 * 1024 * 1024; // 750MB
+    const suggestedConcurrency = Math.floor(
+      (availableMemory * 0.5) / memoryPerProof
+    ); // Use 50% of available
+
+    // Apply limits based on total memory
+    let maxConcurrency = 4;
+    if (totalMemory >= 8 * 1024 * 1024 * 1024) {
+      // 8GB+
+      maxConcurrency = 6;
+    } else if (totalMemory >= 6 * 1024 * 1024 * 1024) {
+      // 6GB+
+      maxConcurrency = 4;
+    } else if (totalMemory >= 4 * 1024 * 1024 * 1024) {
+      // 4GB+
+      maxConcurrency = 3;
+    } else {
+      // Less than 4GB
+      maxConcurrency = 2;
+    }
+
+    const finalConcurrency = Math.max(
+      1,
+      Math.min(suggestedConcurrency, maxConcurrency)
+    );
+    console.log(
+      `[zkp2p] Dynamic concurrency: ${finalConcurrency} (total: ${(totalMemory / 1024 / 1024).toFixed(0)}MB, available: ${(availableMemory / 1024 / 1024).toFixed(0)}MB)`
+    );
+    return finalConcurrency;
+  } catch (error) {
+    console.log(
+      '[zkp2p] Could not determine memory dynamically, using defaults:',
+      error
+    );
+    // Fallback to 1
+    return 1;
+  }
+};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -162,11 +228,26 @@ const Zkp2pProvider = ({
     useState<NetworkEvent | null>(null);
 
   // Proof generation state
-  const [proofData, setProofData] = useState<ProofData | null>(null);
+  const [proofData, setProofData] = useState<ProofData[]>([]);
   const [proofError, setProofError] = useState<Error | null>(null);
   const [lastProofItemIndex, setLastProofItemIndex] = useState<number>(0);
   const [autoGenerateOptions, setAutoGenerateOptions] =
     useState<AutoGenerateProofOptions | null>(null);
+
+  // Cleanup effect for when component unmounts or prover changes
+  useEffect(() => {
+    return () => {
+      // Cancel any active proof generations when unmounting
+      if (gnarkBridge) {
+        gnarkBridge.cancelAllProofs().catch((err) => {
+          console.error('[zkp2p] Error cancelling proofs on unmount:', err);
+        });
+        gnarkBridge.cleanupMemory().catch((err) => {
+          console.error('[zkp2p] Error cleaning up memory on unmount:', err);
+        });
+      }
+    };
+  }, [gnarkBridge]);
 
   // ==========================================================================
   // PROVIDER CONFIGURATION METHODS
@@ -223,7 +304,7 @@ const Zkp2pProvider = ({
         method: payload.request.method,
         headers: {
           ...payload.request.headers,
-          'User-Agent': DEFAULT_USER_AGENT,
+          'User-Agent': getCustomUserAgent(cfg),
         },
         credentials: 'include',
       };
@@ -296,7 +377,7 @@ const Zkp2pProvider = ({
             method: metadata.method,
             headers: {
               ...evt.request.headers,
-              'User-Agent': DEFAULT_USER_AGENT,
+              'User-Agent': getCustomUserAgent(cfg),
             },
             credentials: 'include',
           };
@@ -324,7 +405,6 @@ const Zkp2pProvider = ({
         const txs = extractMetadata(jsonBody, cfg);
         setMetadataList(txs);
         setInterceptedPayload(evt);
-        setAuthWebViewProps(null);
 
         if (
           txs.length === 0 &&
@@ -335,13 +415,10 @@ const Zkp2pProvider = ({
           );
         }
 
+        // Close webview and update state
+        setAuthWebViewProps(null);
         setFlowState('authenticated');
         setAuthError(itemExtractionError);
-
-        // Add a smooth close transition after authentication
-        setTimeout(() => {
-          setAuthWebViewProps(null);
-        }, 300);
       } catch (err) {
         console.error(
           '[zkp2p] failed to retrieve/process JSON body (via _handleAuthIntercept):',
@@ -372,7 +449,7 @@ const Zkp2pProvider = ({
           cfg.metadata.urlRegex,
           cfg.metadata.fallbackUrlRegex,
         ].filter(Boolean) as string[],
-        userAgent: DEFAULT_USER_AGENT,
+        userAgent: getCustomUserAgent(cfg),
         interceptConfig: {
           xhr: true,
           fetch: true,
@@ -442,7 +519,7 @@ const Zkp2pProvider = ({
       setAuthWebViewProps({
         source: { uri: effectiveActionUrl },
         urlPatterns: [],
-        userAgent: DEFAULT_USER_AGENT,
+        userAgent: getCustomUserAgent(cfg),
         domStorageEnabled: true,
         interceptConfig: { xhr: false, fetch: false, html: false },
         additionalCookieDomainsToInclude:
@@ -658,21 +735,14 @@ const Zkp2pProvider = ({
       } else if (type === 'error') {
         console.error('[zkp2p] RPC error:', data);
 
-        let errorMessage = 'Unknown error';
-        if ((data as any).error?.data?.message) {
-          errorMessage = (data as any).error.data.message;
-        } else if ((data as any).error?.message) {
-          errorMessage = (data as any).error.message;
-        } else if ((data as any).message) {
-          errorMessage = (data as any).message;
-        } else if ((data as any).error) {
-          errorMessage = `RPC Error: ${JSON.stringify((data as any).error)}`;
+        // RPC errors come in format: {type: 'error', data: {message: '...', stack: '...'}}
+        const errorMessage = (data as any).data?.message || 'Unknown error';
+        const error = new Error(errorMessage);
+
+        if ((data as any).data?.stack) {
+          error.stack = (data as any).data.stack;
         }
 
-        const error = new Error(errorMessage);
-        if ((data as any).error?.data?.stack) {
-          error.stack = (data as any).error.data.stack;
-        }
         (error as any).rawData = data;
 
         pending.current[id]?.reject(error);
@@ -709,7 +779,7 @@ const Zkp2pProvider = ({
 
       console.log('[zkp2p] Starting proof generation...');
       setFlowState('proofGenerating');
-      setProofData(null);
+      setProofData([]);
       setProofError(null);
       setLastProofItemIndex(itemIndex);
       try {
@@ -733,7 +803,7 @@ const Zkp2pProvider = ({
                 {} as Record<string, string>
               )
             : {};
-        headersToSend['User-Agent'] = DEFAULT_USER_AGENT || '';
+        headersToSend['User-Agent'] = getCustomUserAgent(providerCfg);
         const paramValues: Record<string, string> = {};
         providerCfg.paramNames?.forEach((name, idx) => {
           const sel = providerCfg.paramSelectors?.[idx];
@@ -787,6 +857,10 @@ const Zkp2pProvider = ({
           client: { url: witnessUrl },
           zkEngine: prover === 'reclaim_gnark' ? 'gnark' : 'snarkjs',
           zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
+          zkProofConcurrency:
+            prover === 'reclaim_gnark'
+              ? await calculateGnarkDynamicConcurrency()
+              : 1,
         };
         const res = await _rpcRequest('createClaim', rpc, (stepData) => {
           console.log('[zkp2p] Proof generation step:', stepData);
@@ -799,12 +873,108 @@ const Zkp2pProvider = ({
         });
 
         const proof = parseReclaimProxyProof(res.response ?? null);
-        setProofData({
+        const proofDataItem: ProofData = {
           proofType: 'reclaim',
           proof: proof,
-        });
-        setFlowState('proofGeneratedSuccess');
-        return res;
+        };
+
+        // Check if we need to generate additional proofs
+        if (
+          providerCfg.additionalProofs &&
+          providerCfg.additionalProofs.length > 0
+        ) {
+          const allProofs: ProofData[] = [proofDataItem];
+
+          for (let i = 0; i < providerCfg.additionalProofs.length; i++) {
+            const additionalProofConfig = providerCfg.additionalProofs[i];
+            if (!additionalProofConfig) continue;
+
+            console.log(
+              `[zkp2p] Generating additional proof ${i + 1}/${providerCfg.additionalProofs.length}...`
+            );
+
+            // Build body with param substitution
+            let additionalBody = additionalProofConfig.body;
+            const additionalParamValues: Record<string, string> = {};
+
+            // Extract param values from the original response
+            additionalProofConfig.paramNames.forEach((paramName, idx) => {
+              const selector = additionalProofConfig.paramSelectors[idx];
+              if (!selector) return;
+
+              let responseBody = payload.response.body ?? '{}';
+              if (providerCfg.metadata.preprocessRegex) {
+                const m = responseBody.match(
+                  new RegExp(providerCfg.metadata.preprocessRegex)
+                );
+                if (m?.[1]) responseBody = m[1];
+              }
+
+              if (selector.type === 'jsonPath') {
+                const path = selector.value.replace(
+                  '{{INDEX}}',
+                  String(itemIndex)
+                );
+                const val = (
+                  JSONPath({
+                    path,
+                    json: JSON.parse(responseBody),
+                    resultType: 'value',
+                  }) as any[]
+                )[0];
+                additionalParamValues[paramName] = String(val ?? '');
+              } else if (selector.type === 'regex') {
+                const m = responseBody.match(new RegExp(selector.value));
+                if (m?.[1]) additionalParamValues[paramName] = m[1];
+              }
+            });
+
+            // Replace param placeholders in body
+            Object.entries(additionalParamValues).forEach(([key, value]) => {
+              additionalBody = additionalBody.replace(`{{${key}}}`, value);
+            });
+
+            // Build new provider config for the additional proof
+            const additionalProviderCfg: ProviderSettings = {
+              ...providerCfg,
+              url: additionalProofConfig.url,
+              method: additionalProofConfig.method,
+              body: additionalBody,
+              paramNames: [],
+              paramSelectors: [],
+              skipRequestHeaders: additionalProofConfig.skipRequestHeaders,
+              secretHeaders: additionalProofConfig.secretHeaders,
+              responseMatches: additionalProofConfig.responseMatches,
+              responseRedactions: additionalProofConfig.responseRedactions,
+            };
+
+            // Generate the additional proof
+            const additionalProofResult = await _generateSingleProof(
+              additionalProviderCfg,
+              payload,
+              intentHash,
+              itemIndex
+            );
+
+            // Extract proof from the result
+            const additionalProof = parseReclaimProxyProof(
+              additionalProofResult.response ?? null
+            );
+            allProofs.push({
+              proofType: 'reclaim',
+              proof: additionalProof,
+            });
+          }
+
+          setProofData(allProofs);
+          setFlowState('proofGeneratedSuccess');
+          return allProofs;
+        } else {
+          // Single proof case
+          setProofData([proofDataItem]);
+          setFlowState('proofGeneratedSuccess');
+          return [proofDataItem];
+        }
       } catch (err) {
         setFlowState('proofGeneratedFailure');
         setProofError(err as Error);
@@ -813,7 +983,119 @@ const Zkp2pProvider = ({
         setRpcKey((k) => k + 1);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [_rpcRequest, witnessUrl, prover, setFlowState, setProofData, setRpcKey]
+  );
+
+  // Internal helper to generate a single proof without modifying state
+  const _generateSingleProof = useCallback(
+    async (
+      providerCfg: ProviderSettings,
+      payload: NetworkEvent,
+      intentHash: string,
+      itemIndex: number = 0
+    ) => {
+      if (!payload) throw new Error('No intercepted payload available');
+      if (prover !== 'reclaim_snarkjs' && prover !== 'reclaim_gnark') {
+        throw new Error(`Unsupported prover: ${prover}`);
+      }
+
+      let body = payload.response.body ?? '{}';
+      if (providerCfg.metadata.preprocessRegex) {
+        const m = body.match(new RegExp(providerCfg.metadata.preprocessRegex));
+        if (m?.[1]) body = m[1];
+      }
+
+      const headersArray = Object.entries(payload.request.headers);
+      const headersToSend: Record<string, string> =
+        providerCfg.skipRequestHeaders.length > 0
+          ? headersArray.reduce(
+              (acc, [name, value]) => {
+                if (!providerCfg.skipRequestHeaders.includes(name)) {
+                  acc[name] = value;
+                }
+                return acc;
+              },
+              {} as Record<string, string>
+            )
+          : {};
+      headersToSend['User-Agent'] = getCustomUserAgent(providerCfg);
+
+      const paramValues: Record<string, string> = {};
+      providerCfg.paramNames?.forEach((name, idx) => {
+        const sel = providerCfg.paramSelectors?.[idx];
+        if (!sel) return;
+        if (sel.type === 'jsonPath') {
+          const val = (
+            JSONPath({
+              path: sel.value.replace('{{INDEX}}', String(itemIndex)),
+              json: JSON.parse(body),
+              resultType: 'value',
+            }) as any[]
+          )[0];
+          paramValues[name] = String(val ?? '');
+        } else {
+          const m = body.match(new RegExp(sel.value));
+          if (m?.[1]) paramValues[name] = m[1];
+        }
+      });
+
+      const secret: { headers: Record<string, string>; cookieStr?: string } = {
+        headers: {},
+      };
+      providerCfg.secretHeaders?.forEach((h) => {
+        h === 'Cookie'
+          ? (secret.cookieStr = payload.request.cookie ?? '')
+          : (secret.headers[h] = payload.request.headers[h] ?? '');
+      });
+
+      const rpc: RPCCreateClaimOptions = {
+        name: 'http',
+        context: JSON.stringify({
+          contextAddress: '0x0',
+          contextMessage: intentHash,
+        }),
+        params: {
+          url: providerCfg.url,
+          method: providerCfg.method,
+          body: providerCfg.body,
+          headers: headersToSend,
+          paramValues,
+          responseMatches: providerCfg.responseMatches,
+          responseRedactions: providerCfg.responseRedactions?.map((r) => ({
+            jsonPath: r.jsonPath?.replace('{{INDEX}}', String(itemIndex)),
+            regex: r.regex?.replace('{{INDEX}}', String(itemIndex)),
+            xPath: r.xPath?.replace('{{INDEX}}', String(itemIndex)),
+          })),
+          ...(providerCfg.countryCode
+            ? { geoLocation: providerCfg.countryCode }
+            : {}),
+        },
+        secretParams: secret,
+        ownerPrivateKey:
+          '0x0123788edad59d7c013cdc85e4372f350f828e2cec62d9a2de4560e69aec7f89',
+        client: { url: witnessUrl },
+        zkEngine: prover === 'reclaim_gnark' ? 'gnark' : 'snarkjs',
+        zkOperatorMode: prover === 'reclaim_gnark' ? 'rpc' : 'default',
+        zkProofConcurrency:
+          prover === 'reclaim_gnark'
+            ? await calculateGnarkDynamicConcurrency()
+            : 1,
+      };
+
+      const res = await _rpcRequest('createClaim', rpc, (stepData) => {
+        console.log('[zkp2p] Proof generation step:', stepData);
+        if (stepData.step?.error) {
+          console.error(
+            '[zkp2p] Proof generation step error:',
+            stepData.step.error
+          );
+        }
+      });
+
+      return res;
+    },
+    [_rpcRequest, witnessUrl, prover]
   );
 
   const _handleAutoGenerateProof = useCallback(
@@ -852,8 +1134,11 @@ const Zkp2pProvider = ({
           targetIndex
         );
 
-        if (flowState === 'proofGeneratedSuccess' && proofData) {
-          options.onProofGenerated?.(proofData);
+        if (flowState === 'proofGeneratedSuccess' && proofData.length > 0) {
+          // For backward compatibility, pass the first proof if only one exists
+          // Otherwise pass the entire array
+          const proofToPass = proofData.length === 1 ? proofData[0] : proofData;
+          options.onProofGenerated?.(proofToPass as any);
         }
 
         return result;
@@ -884,7 +1169,7 @@ const Zkp2pProvider = ({
       setAuthError(null);
       setMetadataList([]);
       setInterceptedPayload(null);
-      setProofData(null);
+      setProofData([]);
 
       // Set auto-generation options once at the beginning
       // These will persist through the entire flow (action link → auth → proof)
@@ -953,7 +1238,7 @@ const Zkp2pProvider = ({
     if (
       flowState === 'authenticated' &&
       autoGenerateOptions && // If it exists, it's enabled
-      !proofData && // Only auto-generate if no proof exists yet
+      proofData.length === 0 && // Only auto-generate if no proof exists yet
       provider &&
       interceptedPayload &&
       metadataList.length > 0 &&
@@ -995,7 +1280,7 @@ const Zkp2pProvider = ({
       spinAnimation.setValue(0);
       const timer = setTimeout(() => {
         setFlowState('idle');
-      }, 2000);
+      }, 1000);
       return () => clearTimeout(timer);
     } else {
       spinAnimation.setValue(0);
@@ -1041,9 +1326,7 @@ const Zkp2pProvider = ({
           animationType="slide"
           onRequestClose={closeAuthWebView}
         >
-          <Animated.View
-            style={[styles.nativeBackdrop, styles.nativeBackdropVisible]}
-          >
+          <View style={[styles.nativeBackdrop, styles.nativeBackdropVisible]}>
             <View style={styles.nativeWebviewContainer}>
               <View style={styles.nativeHeader}>
                 <TouchableOpacity
@@ -1058,7 +1341,7 @@ const Zkp2pProvider = ({
                 style={styles.nativeWebview}
               />
             </View>
-          </Animated.View>
+          </View>
         </Modal>
       )}
       <RPCWebView key={rpcKey} {...rpcWebViewProps} />
@@ -1070,16 +1353,51 @@ const Zkp2pProvider = ({
         <Modal transparent animationType="fade" visible={true}>
           <View style={styles.proofSpinnerBackdrop}>
             <View style={styles.proofSpinnerCard}>
+              {/* Exit button in top right */}
+              <TouchableOpacity
+                style={styles.proofSpinnerExitButton}
+                onPress={async () => {
+                  console.log(
+                    '[zkp2p] Exit button pressed, cancelling proof generation'
+                  );
+
+                  // Cancel the proof generation if using gnark
+                  if (gnarkBridge && flowState === 'proofGenerating') {
+                    try {
+                      await gnarkBridge.cancelAllProofs();
+                      console.log('[zkp2p] All proof generations cancelled');
+                    } catch (err) {
+                      console.error('[zkp2p] Error cancelling proofs:', err);
+                    }
+                  }
+
+                  // Clean up state
+                  setFlowState('idle');
+                  setProofError(null);
+
+                  // Clean up memory if using gnark
+                  if (gnarkBridge) {
+                    try {
+                      await gnarkBridge.cleanupMemory();
+                      console.log('[zkp2p] Memory cleaned up');
+                    } catch (err) {
+                      console.error('[zkp2p] Error cleaning up memory:', err);
+                    }
+                  }
+                }}
+              >
+                <Text style={styles.proofSpinnerExitText}>✕</Text>
+              </TouchableOpacity>
+
               <Text style={styles.proofSpinnerTitle}>
                 {flowState === 'proofGeneratedSuccess'
-                  ? 'Proof Generated!'
+                  ? 'Successfully Authenticated!'
                   : flowState === 'proofGeneratedFailure'
-                    ? 'Proof Generation Failed'
+                    ? 'Authentication Failed'
                     : 'Authenticating'}
               </Text>
 
               <View style={styles.proofSpinnerWrapper}>
-                {/* SVG Spinning ring */}
                 <AnimatedSvg
                   width={128}
                   height={128}
@@ -1098,7 +1416,6 @@ const Zkp2pProvider = ({
                   ]}
                   viewBox="0 0 128 128"
                 >
-                  {/* Base circle (gray) */}
                   <Circle
                     cx="64"
                     cy="64"
@@ -1141,7 +1458,7 @@ const Zkp2pProvider = ({
                 <>
                   <Text style={styles.proofSpinnerSubtitle}>
                     {proofError?.message ||
-                      'An error occurred while generating the proof'}
+                      'An error occurred while authenticating'}
                   </Text>
                   <TouchableOpacity
                     style={styles.retryButton}
@@ -1174,13 +1491,13 @@ const Zkp2pProvider = ({
                 <>
                   <Text style={styles.proofSpinnerSubtitle}>
                     {flowState === 'proofGeneratedSuccess'
-                      ? 'Your proof is ready!'
-                      : 'Authenticating payment...'}
+                      ? 'Authenticated!'
+                      : 'Authenticating...'}
                   </Text>
                 </>
               )}
 
-              <Text style={styles.proofSpinnerPoweredBy}>Powered by ZKP2P</Text>
+              <Text style={styles.proofSpinnerPoweredBy}>Secured by ZKP2P</Text>
             </View>
           </View>
         </Modal>
@@ -1319,6 +1636,20 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: '#aaa',
     fontSize: 14,
+  },
+
+  // Proof spinner exit button styles
+  proofSpinnerExitButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
+    zIndex: 10,
+  },
+  proofSpinnerExitText: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: '300',
   },
 });
 

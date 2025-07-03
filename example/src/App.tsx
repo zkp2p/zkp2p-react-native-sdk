@@ -293,7 +293,6 @@ export default function App() {
       witnessUrl="https://witness-proxy-dev.zkp2p.xyz"
       rpcTimeout={60000}
       prover="reclaim_gnark"
-      configBaseUrl="http://localhost:8080/"
     >
       <AppContent
         walletClient={walletClient}

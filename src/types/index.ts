@@ -11,6 +11,7 @@ export interface AuthWVOverrides
 export interface InitialActionOptions {
   enabled?: boolean;
   urlVariables?: Record<string, string>;
+  injectionValues?: Record<string, string>;
 }
 
 export interface AutoGenerateProofOptions {
@@ -327,6 +328,8 @@ export interface ProviderSettings {
       android: string;
       ios: string;
     };
+    injectedJavaScript?: string;
+    injectedJavaScriptParamNames?: string[];
   };
 }
 

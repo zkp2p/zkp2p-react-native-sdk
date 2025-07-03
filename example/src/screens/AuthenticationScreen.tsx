@@ -61,6 +61,9 @@ export const AuthenticationScreen: React.FC<Props> = ({
 
         if (platform === 'wise') {
           receiverId = 'andrewk'; // or whatever default for Wise
+        } else if (platform === 'mercadopago') {
+          receiverId = '0720000791240000001234';
+          amount = '100';
         }
 
         authOptions.initialAction = {
@@ -69,6 +72,14 @@ export const AuthenticationScreen: React.FC<Props> = ({
             AMOUNT: amount,
           },
         };
+
+        // Add injectionValues for MercadoPago to enable auto-fill
+        if (platform === 'mercadopago') {
+          authOptions.initialAction.injectionValues = {
+            RECIPIENT_ID: receiverId,
+            AMOUNT: amount,
+          };
+        }
       }
 
       if (startAuthentication) {

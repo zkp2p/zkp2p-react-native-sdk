@@ -441,6 +441,42 @@ const Zkp2pProvider = ({
     ]
   );
 
+  const _processInjectedScript = useCallback(
+    (
+      script: string | undefined,
+      values: Record<string, string>,
+      allowedParamNames?: string[]
+    ) => {
+      if (!script) return '';
+
+      // Replace placeholders in the script
+      let processedScript = script;
+
+      // If allowedParamNames is provided, only process those parameters
+      const valuesToProcess = allowedParamNames
+        ? Object.entries(values).filter(([key]) =>
+            allowedParamNames.includes(key)
+          )
+        : Object.entries(values);
+
+      // Replace individual value placeholders
+      valuesToProcess.forEach(([key, value]) => {
+        // Escape the value for safe JavaScript string insertion
+        const escapedValue = value
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n');
+        processedScript = processedScript.replace(
+          new RegExp(`{{${key}}}`, 'g'),
+          escapedValue
+        );
+      });
+
+      return processedScript;
+    },
+    []
+  );
+
   const _setupAuthWebViewProps = useCallback(
     (cfg: ProviderSettings) => {
       return {
@@ -516,6 +552,18 @@ const Zkp2pProvider = ({
         });
       }
 
+      // Process injected script with values
+      const injectedScript =
+        initialAction.injectionValues && cfg.mobile?.injectedJavaScript
+          ? _processInjectedScript(
+              cfg.mobile.injectedJavaScript,
+              initialAction.injectionValues,
+              cfg.mobile.injectedJavaScriptParamNames
+            )
+          : '';
+
+      console.log('[zkp2p] Action WebView injectedScript:', injectedScript);
+
       setAuthWebViewProps({
         source: { uri: effectiveActionUrl },
         urlPatterns: [],
@@ -525,6 +573,7 @@ const Zkp2pProvider = ({
         additionalCookieDomainsToInclude:
           cfg.mobile?.includeAdditionalCookieDomains ?? [],
         style: { flex: 1 },
+        injectedJavaScript: injectedScript || undefined,
         onIntercept: (_evt: NetworkEvent) => {
           // Intercept should be off during action phase
         },
@@ -534,6 +583,7 @@ const Zkp2pProvider = ({
             cfg.mobile?.actionCompletedUrlRegex &&
             new RegExp(cfg.mobile?.actionCompletedUrlRegex).test(navState.url)
           ) {
+            // Navigate to authentication phase
             await _authenticateInternal(cfg);
           }
         },
@@ -548,7 +598,13 @@ const Zkp2pProvider = ({
         },
       });
     },
-    [setFlowState, setAuthWebViewProps, setAuthError, _authenticateInternal]
+    [
+      setFlowState,
+      setAuthWebViewProps,
+      setAuthError,
+      _authenticateInternal,
+      _processInjectedScript,
+    ]
   );
 
   const _handleExternalAction = useCallback(

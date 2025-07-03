@@ -4421,34 +4421,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-native-vector-icons@npm:^6.4.18":
-  version: 6.4.18
-  resolution: "@types/react-native-vector-icons@npm:6.4.18"
-  dependencies:
-    "@types/react": "*"
-    "@types/react-native": ^0.70
-  checksum: 1ef458cb5e7a37f41eb400e3153940b1b152e4df76a7c06c7a47c712dbfe46e14b9999f04dde1bd074f338f850e161c6c925174ddea33386b74f8112c940065b
-  languageName: node
-  linkType: hard
-
-"@types/react-native@npm:^0.70":
-  version: 0.70.19
-  resolution: "@types/react-native@npm:0.70.19"
-  dependencies:
-    "@types/react": "*"
-  checksum: 79b504fa56340631079e7c20ea0d9412ec14147b76d0ce189f4403936f529ef1e6fd031383afab117846c5ae039123bcf3afc948bae4432269c6780282726f71
-  languageName: node
-  linkType: hard
-
-"@types/react@npm:*":
-  version: 19.1.8
-  resolution: "@types/react@npm:19.1.8"
-  dependencies:
-    csstype: ^3.0.2
-  checksum: 17e0c74d9c01214938fa805aaa8b97925bf3c5514e88fdf94bec42c0a6d4abbc63d4e30255db176f46fd7f0aa89f8085b9b2b2fa5abaffbbf7e5009386ada892
-  languageName: node
-  linkType: hard
-
 "@types/react@npm:^19.0.0":
   version: 19.1.3
   resolution: "@types/react@npm:19.1.3"
@@ -4749,7 +4721,6 @@ __metadata:
     "@release-it/conventional-changelog": ^9.0.2
     "@types/jest": ^29.5.5
     "@types/react": ^19.0.0
-    "@types/react-native-vector-icons": ^6.4.18
     "@zkp2p/react-native-webview-intercept": ^0.4.0
     "@zkp2p/reclaim-witness-sdk": ^4.0.0-reclaim
     del-cli: ^5.1.0

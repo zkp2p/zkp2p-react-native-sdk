@@ -19,6 +19,7 @@ import {
   Image,
   Platform,
   Alert,
+  Dimensions,
 } from 'react-native';
 
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -189,6 +190,8 @@ const Zkp2pProvider = ({
   const rpcWebViewRef = useRef<WebView>(null);
   const pending = useRef<Record<string, PendingEntry>>({});
   const spinAnimation = useRef(new Animated.Value(0)).current;
+  const slideAnimation = useRef(new Animated.Value(0)).current;
+  const openAnimation = useRef(new Animated.Value(1)).current;
 
   // ==========================================================================
   // GNARK BRIDGE SETUP
@@ -530,6 +533,15 @@ const Zkp2pProvider = ({
 
       const webViewProps = _setupAuthWebViewProps(cfg);
       setAuthWebViewProps(webViewProps);
+      slideAnimation.setValue(0);
+      openAnimation.setValue(1);
+
+      // Animate webview sliding up from bottom
+      Animated.timing(openAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
     },
     [
       _restoreSessionWith,
@@ -537,6 +549,8 @@ const Zkp2pProvider = ({
       setAuthError,
       setAuthWebViewProps,
       _setupAuthWebViewProps,
+      slideAnimation,
+      openAnimation,
     ]
   );
 
@@ -604,6 +618,15 @@ const Zkp2pProvider = ({
           setFlowState('idle');
         },
       });
+      slideAnimation.setValue(0);
+      openAnimation.setValue(1);
+
+      // Animate webview sliding up from bottom
+      Animated.timing(openAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
     },
     [
       setFlowState,
@@ -611,6 +634,8 @@ const Zkp2pProvider = ({
       setAuthError,
       _authenticateInternal,
       _processInjectedScript,
+      slideAnimation,
+      openAnimation,
     ]
   );
 
@@ -1291,13 +1316,51 @@ const Zkp2pProvider = ({
   );
 
   const closeAuthWebView = () => {
-    setAuthWebViewProps(null);
-    setIsWebViewMinimized(false);
+    // Animate closing
+    Animated.timing(openAnimation, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start(() => {
+      setAuthWebViewProps(null);
+      setIsWebViewMinimized(false);
+      slideAnimation.setValue(0);
+    });
   };
 
   const minimizeAuthWebView = () => {
+    const toValue = isWebViewMinimized ? 0 : 1;
+
+    Animated.timing(slideAnimation, {
+      toValue,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+
     setIsWebViewMinimized(!isWebViewMinimized);
   };
+
+  // ==========================================================================
+  // COMPUTED STYLES
+  // ==========================================================================
+
+  const animatedWebViewStyle = useMemo(
+    () => ({
+      height: slideAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [Dimensions.get('window').height * 0.9, 48],
+      }),
+      transform: [
+        {
+          translateY: openAnimation.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, Dimensions.get('window').height],
+          }),
+        },
+      ],
+    }),
+    [slideAnimation, openAnimation]
+  );
 
   // ==========================================================================
   // EFFECTS
@@ -1391,70 +1454,41 @@ const Zkp2pProvider = ({
     >
       {children}
       {authWebViewProps && (
-        <Modal
-          transparent
-          animationType="slide"
-          onRequestClose={closeAuthWebView}
+        <Animated.View
+          style={[styles.nativeWebviewOverlay, animatedWebViewStyle]}
         >
-          <View style={[styles.nativeBackdrop, styles.nativeBackdropVisible]}>
+          <View style={styles.nativeWebviewContainer}>
+            <TouchableOpacity
+              style={styles.nativeHeader}
+              onPress={minimizeAuthWebView}
+              activeOpacity={0.9}
+            >
+              <View style={styles.headerContent}>
+                <View style={styles.headerTitleContainer} />
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    closeAuthWebView();
+                  }}
+                  style={styles.nativeCloseButton}
+                >
+                  <Text style={styles.nativeCloseText}>×</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
             <View
               style={[
-                styles.nativeWebviewContainer,
-                isWebViewMinimized && styles.nativeWebviewContainerMinimized,
+                styles.webviewWrapper,
+                isWebViewMinimized && styles.webviewWrapperHidden,
               ]}
             >
-              <TouchableOpacity
-                style={styles.nativeHeader}
-                onPress={isWebViewMinimized ? minimizeAuthWebView : undefined}
-                activeOpacity={isWebViewMinimized ? 0.7 : 1}
-              >
-                <View style={styles.headerContent}>
-                  <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>
-                      {(() => {
-                        try {
-                          const source = authWebViewProps.source as {
-                            uri?: string;
-                          };
-                          return source?.uri
-                            ? new URL(source.uri).hostname
-                            : 'Loading...';
-                        } catch {
-                          return 'Loading...';
-                        }
-                      })()}
-                    </Text>
-                    {isWebViewMinimized && (
-                      <Text style={styles.headerSubtitle}>Tap to expand</Text>
-                    )}
-                  </View>
-                  <View style={styles.headerButtons}>
-                    <TouchableOpacity
-                      onPress={minimizeAuthWebView}
-                      style={styles.nativeMinimizeButton}
-                    >
-                      <Text style={styles.nativeMinimizeText}>
-                        {isWebViewMinimized ? '□' : '−'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={closeAuthWebView}
-                      style={styles.nativeCloseButton}
-                    >
-                      <Text style={styles.nativeCloseText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </TouchableOpacity>
-              {!isWebViewMinimized && (
-                <InterceptWebView
-                  {...authWebViewProps}
-                  style={styles.nativeWebview}
-                />
-              )}
+              <InterceptWebView
+                {...authWebViewProps}
+                style={styles.nativeWebview}
+              />
             </View>
           </View>
-        </Modal>
+        </Animated.View>
       )}
       <RPCWebView key={rpcKey} {...rpcWebViewProps} />
 
@@ -1498,7 +1532,7 @@ const Zkp2pProvider = ({
                   }
                 }}
               >
-                <Text style={styles.proofSpinnerExitText}>✕</Text>
+                <Text style={styles.proofSpinnerExitText}>×</Text>
               </TouchableOpacity>
 
               <Text style={styles.proofSpinnerTitle}>
@@ -1623,34 +1657,29 @@ const Zkp2pProvider = ({
 // ============================================================================
 
 const styles = StyleSheet.create({
-  // WebView Modal styles
-  nativeBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  nativeBackdropVisible: {
-    opacity: 1,
-  },
-  nativeWebviewContainer: {
-    width: '100%',
-    height: '90%',
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  nativeWebviewContainerMinimized: {
-    height: 'auto',
+  // WebView overlay styles
+  nativeWebviewOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 999,
+  },
+  nativeWebviewContainer: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   nativeHeader: {
-    height: 56,
+    height: 48,
     width: '100%',
     backgroundColor: '#fff',
     borderTopLeftRadius: 16,
@@ -1677,9 +1706,9 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
-    marginTop: 2,
+    fontWeight: '500',
   },
   headerButtons: {
     flexDirection: 'row',
@@ -1688,27 +1717,27 @@ const styles = StyleSheet.create({
   },
   nativeCloseButton: {
     backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 16,
-    padding: 6,
+    borderRadius: 18,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nativeCloseText: {
-    fontSize: 24,
-    color: '#888',
-  },
-  nativeMinimizeButton: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 16,
-    padding: 6,
-    paddingHorizontal: 12,
-  },
-  nativeMinimizeText: {
-    fontSize: 24,
-    color: '#888',
-    fontWeight: 'bold',
+    fontSize: 20,
+    color: '#666',
+    lineHeight: 20,
   },
   nativeWebview: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  webviewWrapper: {
+    flex: 1,
+  },
+  webviewWrapperHidden: {
+    height: 0,
+    overflow: 'hidden',
   },
 
   // Proof Generation Spinner styles
@@ -1802,9 +1831,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   proofSpinnerExitText: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#fff',
-    fontWeight: '300',
+    fontWeight: '400',
+    lineHeight: 20,
   },
 });
 

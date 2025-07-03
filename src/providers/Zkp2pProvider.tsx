@@ -234,6 +234,9 @@ const Zkp2pProvider = ({
   const [autoGenerateOptions, setAutoGenerateOptions] =
     useState<AutoGenerateProofOptions | null>(null);
 
+  // WebView state
+  const [isWebViewMinimized, setIsWebViewMinimized] = useState(false);
+
   // Cleanup effect for when component unmounts or prover changes
   useEffect(() => {
     return () => {
@@ -400,6 +403,10 @@ const Zkp2pProvider = ({
               `Fallback replay HTTP ${resp.status} for ${cfg.url}`
             );
           jsonBody = await resp.json();
+          console.log(
+            `[zkp2p] Fallback replay response:`,
+            JSON.stringify(jsonBody)
+          );
         }
 
         const txs = extractMetadata(jsonBody, cfg);
@@ -1283,7 +1290,14 @@ const Zkp2pProvider = ({
     [provider, _authenticateInternal]
   );
 
-  const closeAuthWebView = () => setAuthWebViewProps(null);
+  const closeAuthWebView = () => {
+    setAuthWebViewProps(null);
+    setIsWebViewMinimized(false);
+  };
+
+  const minimizeAuthWebView = () => {
+    setIsWebViewMinimized(!isWebViewMinimized);
+  };
 
   // ==========================================================================
   // EFFECTS
@@ -1383,19 +1397,61 @@ const Zkp2pProvider = ({
           onRequestClose={closeAuthWebView}
         >
           <View style={[styles.nativeBackdrop, styles.nativeBackdropVisible]}>
-            <View style={styles.nativeWebviewContainer}>
-              <View style={styles.nativeHeader}>
-                <TouchableOpacity
-                  onPress={closeAuthWebView}
-                  style={styles.nativeCloseButton}
-                >
-                  <Text style={styles.nativeCloseText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <InterceptWebView
-                {...authWebViewProps}
-                style={styles.nativeWebview}
-              />
+            <View
+              style={[
+                styles.nativeWebviewContainer,
+                isWebViewMinimized && styles.nativeWebviewContainerMinimized,
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.nativeHeader}
+                onPress={isWebViewMinimized ? minimizeAuthWebView : undefined}
+                activeOpacity={isWebViewMinimized ? 0.7 : 1}
+              >
+                <View style={styles.headerContent}>
+                  <View style={styles.headerTitleContainer}>
+                    <Text style={styles.headerTitle}>
+                      {(() => {
+                        try {
+                          const source = authWebViewProps.source as {
+                            uri?: string;
+                          };
+                          return source?.uri
+                            ? new URL(source.uri).hostname
+                            : 'Loading...';
+                        } catch {
+                          return 'Loading...';
+                        }
+                      })()}
+                    </Text>
+                    {isWebViewMinimized && (
+                      <Text style={styles.headerSubtitle}>Tap to expand</Text>
+                    )}
+                  </View>
+                  <View style={styles.headerButtons}>
+                    <TouchableOpacity
+                      onPress={minimizeAuthWebView}
+                      style={styles.nativeMinimizeButton}
+                    >
+                      <Text style={styles.nativeMinimizeText}>
+                        {isWebViewMinimized ? '□' : '−'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={closeAuthWebView}
+                      style={styles.nativeCloseButton}
+                    >
+                      <Text style={styles.nativeCloseText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+              {!isWebViewMinimized && (
+                <InterceptWebView
+                  {...authWebViewProps}
+                  style={styles.nativeWebview}
+                />
+              )}
             </View>
           </View>
         </Modal>
@@ -1586,17 +1642,49 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  nativeWebviewContainerMinimized: {
+    height: 'auto',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
   nativeHeader: {
     height: 56,
     width: '100%',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingTop: 8,
-    paddingRight: 16,
     backgroundColor: '#fff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     zIndex: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: '100%',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   nativeCloseButton: {
     backgroundColor: 'rgba(0,0,0,0.05)',
@@ -1606,6 +1694,17 @@ const styles = StyleSheet.create({
   nativeCloseText: {
     fontSize: 24,
     color: '#888',
+  },
+  nativeMinimizeButton: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 16,
+    padding: 6,
+    paddingHorizontal: 12,
+  },
+  nativeMinimizeText: {
+    fontSize: 24,
+    color: '#888',
+    fontWeight: 'bold',
   },
   nativeWebview: {
     flex: 1,

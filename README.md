@@ -5,13 +5,18 @@ React Native SDK for ZKP2P - A peer-to-peer fiat-to-crypto on/off-ramp powered b
 ## Installation
 
 ```sh
-yarn add @zkp2p/zkp2p-react-native-sdk @react-native-async-storage/async-storage @react-native-cookies/cookies react-native-webview @zkp2p/webview-intercept viem react-native-svg
+yarn add @zkp2p/zkp2p-react-native-sdk @react-native-async-storage/async-storage @react-native-cookies/cookies react-native-webview @zkp2p/webview-intercept viem react-native-svg react-native-device-info
 ```
 
 ### iOS Setup
 ```sh
 cd ios && pod install
 ```
+
+### Additional Dependencies
+
+- `react-native-device-info`: Used for dynamic memory management in proof generation
+- `react-native-svg`: Required for animated UI components
 
 ## Quick Start
 
@@ -88,11 +93,12 @@ function PaymentFlow() {
 |------|------|---------|-------------|
 | `walletClient` | `WalletClient` | Optional | Viem wallet client for blockchain interactions (required for full mode) |
 | `apiKey` | `string` | Optional | Your ZKP2P API key (required for full mode) |
-| `chainId` | `number` | `8453` | Blockchain chain ID (8453 for Base) |
+| `chainId` | `number` | `8453` | Blockchain chain ID (8453 for Base, 534352 for Scroll, 31337 for Hardhat) |
 | `prover` | `'reclaim_snarkjs' \| 'reclaim_gnark'` | `'reclaim_gnark'` | Proof generation method |
 | `witnessUrl` | `string` | `'https://witness-proxy.zkp2p.xyz'` | Witness server URL |
 | `baseApiUrl` | `string` | `'https://api.zkp2p.xyz/v1'` | ZKP2P API base URL |
 | `rpcTimeout` | `number` | `30000` | RPC timeout in milliseconds |
+| `configBaseUrl` | `string` | `'https://raw.githubusercontent.com/zkp2p/providers/main/'` | Provider configuration base URL |
 
 ### Core Flow Functions
 
@@ -195,20 +201,22 @@ const tx = await zkp2pClient.fulfillIntent(fulfillArgs);
 ```typescript
 const {
   // State
-  flowState,        // Current flow state: 'idle' | 'authenticating' | 'authenticated' | 'proofGenerating' | 'proofGeneratedSuccess' | 'proofGeneratedFailure'
-  provider,         // Current provider configuration
-  proofData,        // Generated proof data
-  metadataList,     // List of transactions from authentication
-  authError,        // Authentication error if any
+  flowState,           // Current flow state: 'idle' | 'authenticating' | 'authenticated' | 'actionStarted' | 'proofGenerating' | 'proofGeneratedSuccess' | 'proofGeneratedFailure'
+  provider,            // Current provider configuration
+  proofData,           // Generated proof data (ProofData[])
+  metadataList,        // List of transactions from authentication
+  authError,           // Authentication error if any
+  interceptedPayload,  // Network event data from authentication
+  authWebViewProps,    // Props for the authentication WebView
   
   // Methods
-  initiate,         // Start the flow
-  authenticate,     // Manual authentication
-  generateProof,    // Generate proof for transaction
-  closeAuthWebView, // Close authentication modal
+  initiate,            // Start the flow
+  authenticate,        // Manual authentication
+  generateProof,       // Generate proof for transaction (returns ProofData[])
+  closeAuthWebView,    // Close authentication modal
   
   // Client
-  zkp2pClient,      // Direct access to contract methods
+  zkp2pClient,         // Direct access to contract methods (null in proof-only mode)
 } = useZkp2p();
 ```
 
@@ -298,12 +306,23 @@ function BuyCrypto() {
 ### Flow States
 
 - `idle` - No active operation
-- `actionStarted` - Payment action initiated (Venmo/CashApp opened)
+- `actionStarted` - Payment action initiated (Venmo/CashApp/etc opened)
 - `authenticating` - User authenticating with payment provider
 - `authenticated` - Authentication complete, transactions available
 - `proofGenerating` - Generating zero-knowledge proof
 - `proofGeneratedSuccess` - Proof successfully generated
 - `proofGeneratedFailure` - Proof generation failed
+
+### Supported Platforms and Actions
+
+| Platform | Action Types | Description |
+|----------|-------------|-------------|
+| Venmo | `transfer_venmo` | Venmo P2P transfers |
+| Cash App | `transfer_cashapp` | Cash App transfers |
+| Revolut | `transfer_revolut` | Revolut transfers |
+| Wise | `transfer_wise` | Wise transfers |
+| MercadoPago | `transfer_mercadopago` | MercadoPago transfers |
+| Zelle | `transfer_zelle` | Zelle transfers |
 
 ### Error Handling
 
@@ -313,9 +332,52 @@ const { authError } = useZkp2p();
 if (authError) {
   console.error('Auth failed:', authError.message);
 }
+
+// Handle proof generation errors
+try {
+  await generateProof(provider, interceptedPayload, intentHash, 0);
+} catch (error) {
+  console.error('Proof generation failed:', error);
+  // The SDK provides retry functionality in the UI
+}
 ```
 
-## Gnark (WIP)
+### Advanced Configuration
+
+#### Custom User Agent
+
+The SDK allows configuring custom user agents per provider in the provider configuration:
+
+```typescript
+provider.mobile?.userAgent = {
+  ios: 'Custom iOS User Agent',
+  android: 'Custom Android User Agent'
+};
+```
+
+#### Multiple Proof Generation
+
+The SDK supports generating multiple proofs for different transaction data:
+
+```typescript
+const proofs = await generateProof(
+  provider,
+  interceptedPayload,
+  intentHash,
+  0 // itemIndex
+);
+// Returns ProofData[] - array of proofs if multiple configured
+```
+
+#### Dynamic Memory Management
+
+The SDK automatically adjusts proof generation concurrency based on device memory:
+- Devices with 8GB+ RAM: Up to 6 concurrent proofs
+- Devices with 6GB+ RAM: Up to 4 concurrent proofs
+- Devices with 4GB+ RAM: Up to 3 concurrent proofs
+- Devices with less than 4GB: Up to 2 concurrent proofs
+
+## Gnark Native Proving
 
 The SDK includes native gnark proving for optimal performance. Circuit files are stored in the `gnark-circuits/` directory and are automatically loaded on initialization.
 
@@ -323,9 +385,100 @@ The SDK includes native gnark proving for optimal performance. Circuit files are
 - iOS: Uses `libgnarkprover.xcframework`
 - Android: Uses `libgnarkprover.so`
 
+### Performance Optimizations
+- Dynamic memory-based concurrency management
+- Automatic memory cleanup after proof generation
+- Proof cancellation support for better user experience
+
+## UI Components
+
+### Authentication WebView
+
+The SDK provides a built-in WebView component for authentication:
+- Slide-up animation from bottom
+- Minimizable to 48px height
+- Tap header to minimize/expand
+- Clean circular close button
+- No backdrop overlay - allows interaction with main app
+
+### Proof Generation Spinner
+
+A modal spinner appears during proof generation:
+- Dark themed UI
+- Animated progress ring
+- Exit button to cancel proof generation
+- Retry functionality on failure
+- Success/failure states with appropriate messaging
+
 ## Contributing
 
 See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow.
+
+## Client Methods
+
+### Contract Interactions
+
+```typescript
+const { zkp2pClient } = useZkp2p();
+
+// Available methods:
+zkp2pClient.signalIntent(params)          // Signal buy/sell intent
+zkp2pClient.fulfillIntent(params)         // Complete transaction with proof
+zkp2pClient.createDeposit(params)         // Create new deposit
+zkp2pClient.withdrawDeposit(params)       // Withdraw deposit
+zkp2pClient.cancelIntent(params)          // Cancel pending intent
+zkp2pClient.releaseFundsToPayer(params)  // Release escrowed funds
+
+// Query methods:
+zkp2pClient.getQuote(params)              // Get price quotes
+zkp2pClient.getPayeeDetails(params)       // Get payee information
+zkp2pClient.getAccountDeposits(address)   // Get user's deposits
+zkp2pClient.getAccountIntent(address)     // Get user's active intent
+
+// Utility methods:
+zkp2pClient.getUsdcAddress()              // Get USDC contract address
+zkp2pClient.getDeployedAddresses()        // Get all contract addresses
+```
+
+## Type Definitions
+
+### Core Types
+
+```typescript
+// Proof data structure
+interface ProofData {
+  proofType: 'reclaim';
+  proof: ReclaimProof;
+}
+
+// Flow states
+type FlowState =
+  | 'idle'
+  | 'authenticating'
+  | 'authenticated'
+  | 'actionStarted'
+  | 'proofGenerating'
+  | 'proofGeneratedSuccess'
+  | 'proofGeneratedFailure';
+
+// Initiate options
+interface InitiateOptions {
+  authOverrides?: AuthWVOverrides;
+  existingProviderConfig?: ProviderSettings;
+  initialAction?: {
+    enabled?: boolean;
+    urlVariables?: Record<string, string>;
+    injectionValues?: Record<string, string>;
+  };
+  autoGenerateProof?: {
+    intentHash?: string;
+    itemIndex?: number;
+    onProofGenerated?: (proofData: ProofData) => void;
+    onProofError?: (error: Error) => void;
+  };
+  skipAction?: boolean;
+}
+```
 
 ## License
 

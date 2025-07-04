@@ -56,19 +56,21 @@ export const AuthenticationScreen: React.FC<Props> = ({
 
       // Add initialAction with URL variables for platforms that need them (Wise and Mercado Pago)
       if (!shouldSkipAction) {
-        let receiverId = 'ethereum';
-        let amount = '10';
+        authOptions.initialAction = {};
 
-        if (platform === 'wise') {
-          receiverId = 'andrewk'; // or whatever default for Wise
+        // Add injectionValues for MercadoPago to enable auto-fill
+        if (platform === 'mercadopago') {
+          authOptions.initialAction.injectionValues = {
+            RECIPIENT_ID: '0720000791240000001234',
+            AMOUNT: '100',
+          };
         }
 
-        authOptions.initialAction = {
-          urlVariables: {
-            RECEIVER_ID: receiverId,
-            AMOUNT: amount,
-          },
-        };
+        if (platform === 'wise') {
+          authOptions.initialAction.injectionValues = {
+            RECIPIENT_ID: '@alexanders6341',
+          };
+        }
       }
 
       if (startAuthentication) {

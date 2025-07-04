@@ -1,6 +1,6 @@
 {
   "name": "@zkp2p/zkp2p-react-native-sdk",
-  "version": "0.0.1-rc.17",
+  "version": "0.0.1-rc.18",
   "description": "React Native SDK for ZKP2P",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
